@@ -10,6 +10,7 @@ import {
   toApiEvaluator,
   toJobConfigurationInput,
 } from "@/src/features/evals/server/unstable-public-api/adapters";
+import { UnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-errors";
 import type {
   StoredPublicContinuousEvaluationConfig,
   StoredPublicEvaluatorTemplate,
@@ -108,6 +109,86 @@ describe("unstable public eval adapters", () => {
         },
       ],
     });
+  });
+
+  it("rejects invalid static filter option values", () => {
+    expect(() =>
+      toJobConfigurationInput({
+        input: {
+          name: "answer_quality",
+          target: "observation",
+          enabled: true,
+          sampling: 1,
+          filter: [
+            {
+              type: "stringOptions",
+              column: "type",
+              operator: "any of",
+              value: ["NOT_A_REAL_TYPE"],
+            },
+          ],
+          mapping: [{ variable: "input", source: "input" }],
+        },
+        evaluatorVariables: ["input"],
+      }),
+    ).toThrow(UnstablePublicApiError);
+  });
+
+  it("rejects malformed jsonPath selectors", () => {
+    expect(() =>
+      toJobConfigurationInput({
+        input: {
+          name: "metadata_projection",
+          target: "observation",
+          enabled: true,
+          sampling: 1,
+          filter: [],
+          mapping: [
+            {
+              variable: "input",
+              source: "metadata",
+              jsonPath: "$[",
+            },
+          ],
+        },
+        evaluatorVariables: ["input"],
+      }),
+    ).toThrow('invalid jsonPath "$["');
+  });
+
+  it("rejects missing evaluator variable mappings", () => {
+    expect(() =>
+      toJobConfigurationInput({
+        input: {
+          name: "answer_quality",
+          target: "observation",
+          enabled: true,
+          sampling: 1,
+          filter: [],
+          mapping: [{ variable: "input", source: "input" }],
+        },
+        evaluatorVariables: ["input", "output"],
+      }),
+    ).toThrow("Missing mappings for evaluator variables: output");
+  });
+
+  it("rejects duplicate evaluator variable mappings", () => {
+    expect(() =>
+      toJobConfigurationInput({
+        input: {
+          name: "answer_quality",
+          target: "observation",
+          enabled: true,
+          sampling: 1,
+          filter: [],
+          mapping: [
+            { variable: "input", source: "input" },
+            { variable: "input", source: "metadata" },
+          ],
+        },
+        evaluatorVariables: ["input"],
+      }),
+    ).toThrow('Mapping variable "input" can only be mapped once');
   });
 
   it("translates stored continuous evaluations back into public API records", () => {

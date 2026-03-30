@@ -7,7 +7,6 @@ import { throwIfNoProjectAccess } from "@/src/features/rbac/utils/checkProjectAc
 import { auditLog } from "@/src/features/audit-logs/auditLog";
 import {
   DEFAULT_TRACE_JOB_DELAY,
-  compilePersistedEvalOutputDefinition,
   ZodModelConfig,
   deriveEvaluatorDisplayStateFromExecutionCounts,
   type OrderByState,
@@ -25,7 +24,6 @@ import {
   orderBy,
   jsonSchema,
   EvalTargetObject,
-  PersistedEvalOutputDefinitionSchema,
 } from "@langfuse/shared";
 import {
   getQueue,
@@ -39,7 +37,6 @@ import {
   tableColumnsToSqlFilterAndPrefix,
   orderByToPrismaSql,
   DefaultEvalModelService,
-  testModelCall,
   invalidateProjectEvalConfigCaches,
 } from "@langfuse/shared/src/server";
 import { TRPCError } from "@trpc/server";
@@ -60,6 +57,7 @@ import {
   selectDatasetEvaluatorsForStatusChange,
   shouldValidateBeforeActivation,
 } from "@/src/features/evals/server/evalConfigState";
+import { getEvaluatorDefinitionPreflightError } from "@/src/features/evals/server/evaluator-preflight";
 
 const ConfigWithTemplateSchema = z.object({
   id: z.string(),
@@ -194,40 +192,21 @@ const validateEvalTemplateCanRun = async ({
     });
   }
 
-  const modelConfig = await DefaultEvalModelService.fetchValidModelConfig(
+  const error = await getEvaluatorDefinitionPreflightError({
     projectId,
-    template.provider ?? undefined,
-    template.model ?? undefined,
-    template.modelParams,
-  );
+    template: {
+      name: template.name,
+      provider: template.provider,
+      model: template.model,
+      modelParams: template.modelParams,
+      outputDefinition: template.outputDefinition,
+    },
+  });
 
-  if (!modelConfig.valid) {
+  if (error) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: `No valid LLM model found for evaluator "${template.name}". ${modelConfig.error}`,
-    });
-  }
-
-  try {
-    const parsedOutputDefinition = PersistedEvalOutputDefinitionSchema.parse(
-      template.outputDefinition,
-    );
-    const compiledOutputDefinition = compilePersistedEvalOutputDefinition(
-      parsedOutputDefinition,
-    );
-
-    await testModelCall({
-      provider: modelConfig.config.provider,
-      model: modelConfig.config.model,
-      apiKey: modelConfig.config.apiKey,
-      modelConfig: modelConfig.config.modelParams,
-      structuredOutputSchema: compiledOutputDefinition.outputResultSchema,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `Model configuration not valid for evaluator "${template.name}". ${message}`,
+      message: error,
     });
   }
 };

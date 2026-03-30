@@ -1,21 +1,44 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 types:
   EvaluatorType:
+    docs: |
+      The evaluator engine type.
+
+      The unstable public API currently supports only LLM-as-a-judge evaluators.
     enum:
       - llm_as_judge
 
   ContinuousEvaluationTarget:
+    docs: |
+      The ingestion object type that should trigger evaluation runs.
+
+      - `observation` evaluates live-ingested observations such as generations, spans, and events.
+      - `experiment` evaluates live experiment executions and can additionally map `expected_output`.
     enum:
       - observation
       - experiment
 
   ContinuousEvaluationStatus:
+    docs: |
+      Effective runtime status of the continuous evaluation.
+
+      - `active`: enabled and currently runnable.
+      - `inactive`: disabled by configuration.
+      - `paused`: enabled, but Langfuse has blocked execution until the underlying issue is resolved.
     enum:
       - active
       - inactive
       - paused
 
   ContinuousEvaluationMappingSource:
+    docs: |
+      Source field used to populate a prompt variable.
+
+      Use these values when mapping evaluator prompt variables to live data:
+      - `input`: the observation or experiment input
+      - `output`: the observation or experiment output
+      - `metadata`: the observation metadata object
+      - `expected_output`: the experiment item expected output. Only valid for `target=experiment`.
     enum:
       - input
       - output
@@ -23,13 +46,95 @@ types:
       - expected_output
 
   EvaluatorModelConfig:
+    docs: |
+      Optional explicit model configuration for an evaluator.
+
+      If omitted, Langfuse uses the project's default evaluation model.
+      If provided, the model must be runnable for the project at creation or update time.
     properties:
-      provider: string
-      model: string
-      modelParams: optional<nullable<map<string, unknown>>>
+      provider:
+        type: string
+        docs: Provider identifier, for example `openai` or `anthropic`.
+      model:
+        type: string
+        docs: Model identifier exposed by the provider, for example `gpt-4.1-mini`.
+      modelParams:
+        type: optional<nullable<map<string, unknown>>>
+        docs: Optional provider-specific model parameters such as temperature.
+    examples:
+      - value:
+          provider: openai
+          model: gpt-4.1-mini
+          modelParams:
+            temperature: 0
 
   ContinuousEvaluationMapping:
+    docs: |
+      Maps one evaluator prompt variable to one source field from the target object.
+
+      Every variable extracted from the evaluator prompt must be mapped exactly once.
+      Use `jsonPath` only when the source field is a JSON object and you want to project a nested value.
     properties:
-      variable: string
-      source: ContinuousEvaluationMappingSource
-      jsonPath: optional<string>
+      variable:
+        type: string
+        docs: |
+          Prompt variable name without braces.
+
+          Example: for the prompt `Judge {{input}} against {{output}}`, use `input` and `output`.
+      source:
+        type: ContinuousEvaluationMappingSource
+        docs: Source field that should populate the prompt variable.
+      jsonPath:
+        type: optional<string>
+        docs: |
+          Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.
+
+          Requirements:
+          - Must start with `$`
+          - Must be a syntactically valid JSONPath expression
+          - Most useful with `source=metadata`
+    examples:
+      - name: BasicObservationMapping
+        value:
+          variable: input
+          source: input
+      - name: MetadataProjectionMapping
+        value:
+          variable: customer_tier
+          source: metadata
+          jsonPath: "$.customer.tier"
+
+  ContinuousEvaluationFilter:
+    docs: |
+      Filter condition used to decide whether a live-ingested target should be evaluated.
+
+      Each filter object follows the same filter schema used elsewhere in the Langfuse API.
+      The `column`, `operator`, and `value` fields depend on the selected filter `type`.
+
+      Common examples:
+      - Observation type filter:
+        `{ "type": "stringOptions", "column": "type", "operator": "any of", "value": ["GENERATION"] }`
+      - Observation level filter:
+        `{ "type": "stringOptions", "column": "level", "operator": "any of", "value": ["ERROR"] }`
+      - Experiment dataset filter:
+        `{ "type": "stringOptions", "column": "datasetId", "operator": "any of", "value": ["dataset-prod"] }`
+
+      Target-specific notes:
+      - `observation` supports observation-oriented columns such as `type`, `name`, `environment`, `level`, `version`, `traceName`, `userId`, `sessionId`, `tags`, `metadata`, and `parentObservationId`.
+      - `experiment` currently supports `datasetId`.
+    type: map<string, unknown>
+    examples:
+      - name: ObservationTypeFilter
+        value:
+          type: stringOptions
+          column: type
+          operator: any of
+          value:
+            - GENERATION
+      - name: ExperimentDatasetFilter
+        value:
+          type: stringOptions
+          column: datasetId
+          operator: any of
+          value:
+            - dataset-prod

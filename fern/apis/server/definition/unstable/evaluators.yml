@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 imports:
   commons: ./commons.yml
+  errors: ./errors.yml
   pagination: ../utils/pagination.yml
 
 service:
@@ -9,16 +10,102 @@ service:
   endpoints:
     create:
       docs: |
-        Create an evaluator on the unstable public API.
+        Create a reusable evaluator definition.
 
-        Evaluators define reusable scoring logic. This unstable surface may change as the evaluation data model evolves.
+        Use this resource to define **how** Langfuse should score data. An evaluator contains the prompt, output schema, and optional model configuration, but it does **not** decide which live objects are evaluated. To deploy an evaluator against ingested data, create a `continuous-evaluation` separately.
+
+        Recommended workflow:
+        1. Create the evaluator.
+        2. Read the returned `variables` array.
+        3. Create one or more continuous evaluations that reference the evaluator and map every variable.
+
+        Update behavior:
+        - The public API exposes evaluators as a single mutable resource.
+        - Internal versioning is intentionally hidden from clients.
+
+        Unstable API note:
+        - This surface may evolve while the underlying evaluation data model is being redesigned.
       method: POST
       path: /evaluators
       request: CreateEvaluatorRequest
       response: Evaluator
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.MethodNotAllowedError
+        - errors.ConflictError
+        - errors.UnprocessableContentError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
+      examples:
+        - name: CreateAnswerCorrectnessEvaluator
+          docs: Create an evaluator that compares an input to an output and produces a numeric correctness score.
+          request:
+            name: answer-correctness
+            description: Scores whether the final answer is correct for the given input.
+            prompt: |
+              You are grading an answer.
+
+              Input:
+              {{input}}
+
+              Output:
+              {{output}}
+
+              Return a score between 0 and 1.
+            outputDefinition:
+              version: 1
+              dataType: NUMERIC
+              reasoning:
+                description: Explain why the score was assigned.
+              score:
+                description: Correctness score between 0 and 1.
+            modelConfig:
+              provider: openai
+              model: gpt-4.1-mini
+              modelParams:
+                temperature: 0
+          response:
+            body:
+              id: eval_123
+              name: answer-correctness
+              description: Scores whether the final answer is correct for the given input.
+              type: llm_as_judge
+              prompt: |
+                You are grading an answer.
+
+                Input:
+                {{input}}
+
+                Output:
+                {{output}}
+
+                Return a score between 0 and 1.
+              variables:
+                - input
+                - output
+              outputDefinition:
+                version: 1
+                dataType: NUMERIC
+                reasoning:
+                  description: Explain why the score was assigned.
+                score:
+                  description: Correctness score between 0 and 1.
+              modelConfig:
+                provider: openai
+                model: gpt-4.1-mini
+                modelParams:
+                  temperature: 0
+              continuousEvaluationCount: 0
+              createdAt: "2026-03-30T09:00:00.000Z"
+              updatedAt: "2026-03-30T09:00:00.000Z"
 
     list:
-      docs: List evaluators on the unstable public API.
+      docs: |
+        List evaluators in the authenticated project.
+
+        This endpoint returns the current public evaluator state only. It does not expose internal evaluator version history.
       method: GET
       path: /evaluators
       request:
@@ -26,79 +113,240 @@ service:
         query-parameters:
           page:
             type: optional<integer>
-            docs: Page number, starts at 1.
+            docs: 1-based page number. Defaults to `1`.
           limit:
             type: optional<integer>
-            docs: Limit of items per page.
+            docs: Maximum number of items per page. Defaults to `50`.
       response: Evaluators
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.MethodNotAllowedError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
     get:
-      docs: Get an evaluator on the unstable public API.
+      docs: |
+        Get one evaluator by its stable public identifier.
+
+        Use this endpoint when you need the current prompt, output definition, and derived variables before creating or updating a continuous evaluation.
       method: GET
       path: /evaluators/{evaluatorId}
       path-parameters:
         evaluatorId:
           type: string
-          docs: Stable evaluator identifier.
+          docs: Stable public evaluator identifier returned by the evaluator endpoints.
       response: Evaluator
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.NotFoundError
+        - errors.MethodNotAllowedError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
     update:
-      docs: Update an evaluator on the unstable public API.
+      docs: |
+        Update the current public state of an evaluator.
+
+        Typical uses:
+        - rename the evaluator
+        - refine the prompt
+        - change the output schema
+        - switch to a different evaluation model
+
+        Important behavior:
+        - Any provided fields replace the current values.
+        - Internal evaluator versioning remains hidden from API clients.
+        - If the resulting evaluator cannot run, the request fails with `422` and `code=evaluator_preflight_failed`.
       method: PATCH
       path: /evaluators/{evaluatorId}
       path-parameters:
         evaluatorId:
           type: string
-          docs: Stable evaluator identifier.
+          docs: Stable public evaluator identifier.
       request: UpdateEvaluatorRequest
       response: Evaluator
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.NotFoundError
+        - errors.MethodNotAllowedError
+        - errors.ConflictError
+        - errors.UnprocessableContentError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
     delete:
-      docs: Delete an evaluator on the unstable public API.
+      docs: |
+        Delete an evaluator.
+
+        Deletion is only allowed when no continuous evaluations still reference the evaluator.
+        If the evaluator is still in use, the request fails with `409` and `code=evaluator_in_use`.
       method: DELETE
       path: /evaluators/{evaluatorId}
       path-parameters:
         evaluatorId:
           type: string
-          docs: Stable evaluator identifier.
+          docs: Stable public evaluator identifier.
       response: DeleteEvaluatorResponse
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.NotFoundError
+        - errors.MethodNotAllowedError
+        - errors.ConflictError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
 types:
   Evaluator:
+    docs: |
+      Reusable scoring definition.
+
+      An evaluator describes **how** to score data:
+      - prompt
+      - extracted prompt variables
+      - output schema
+      - optional explicit model configuration
+
+      It does not define **which** live objects are evaluated. That is the job of `continuous-evaluations`.
     properties:
-      id: string
-      name: string
-      description: nullable<string>
-      type: commons.EvaluatorType
-      prompt: string
-      variables: list<string>
-      outputDefinition: unknown
-      modelConfig: nullable<commons.EvaluatorModelConfig>
-      continuousEvaluationCount: integer
-      createdAt: datetime
-      updatedAt: datetime
+      id:
+        type: string
+        docs: Stable public evaluator identifier.
+      name:
+        type: string
+        docs: Project-scoped evaluator name. Must be unique within the project.
+      description:
+        type: nullable<string>
+        docs: Optional human-readable description of what the evaluator measures.
+      type:
+        type: commons.EvaluatorType
+        docs: Evaluator engine type. Currently always `llm_as_judge`.
+      prompt:
+        type: string
+        docs: Prompt template used during evaluation.
+      variables:
+        type: list<string>
+        docs: |
+          Variables extracted from the evaluator prompt.
+
+          Every variable in this list must be mapped exactly once when creating a continuous evaluation.
+      outputDefinition:
+        type: unknown
+        docs: Structured output schema that the evaluator must return.
+      modelConfig:
+        type: nullable<commons.EvaluatorModelConfig>
+        docs: Explicit model configuration, or `null` when the project default evaluation model is used.
+      continuousEvaluationCount:
+        type: integer
+        docs: Number of continuous evaluations in the project that currently reference this evaluator.
+      createdAt:
+        type: datetime
+        docs: Timestamp when the public evaluator resource was first created.
+      updatedAt:
+        type: datetime
+        docs: Timestamp when the public evaluator resource was last updated.
+    examples:
+      - value:
+          id: eval_123
+          name: answer-correctness
+          description: Scores whether the final answer is correct for the given input.
+          type: llm_as_judge
+          prompt: |
+            You are grading an answer.
+
+            Input:
+            {{input}}
+
+            Output:
+            {{output}}
+          variables:
+            - input
+            - output
+          outputDefinition:
+            version: 1
+            dataType: NUMERIC
+            reasoning:
+              description: Explain why the score was assigned.
+            score:
+              description: Correctness score between 0 and 1.
+          modelConfig:
+            provider: openai
+            model: gpt-4.1-mini
+            modelParams:
+              temperature: 0
+          continuousEvaluationCount: 2
+          createdAt: "2026-03-30T09:00:00.000Z"
+          updatedAt: "2026-03-30T09:15:00.000Z"
 
   Evaluators:
+    docs: Paginated list of evaluators.
     properties:
-      data: list<Evaluator>
-      meta: pagination.MetaResponse
+      data:
+        type: list<Evaluator>
+        docs: Evaluators in the current page.
+      meta:
+        type: pagination.MetaResponse
+        docs: Standard pagination metadata.
 
   CreateEvaluatorRequest:
+    docs: |
+      Request body for creating an evaluator.
+
+      Minimal pattern:
+      - set `name`
+      - write a prompt with one or more `{{variables}}`
+      - define the expected structured output
+      - optionally pin a specific model configuration
     properties:
-      name: string
-      description: optional<nullable<string>>
-      prompt: string
-      outputDefinition: unknown
-      modelConfig: optional<nullable<commons.EvaluatorModelConfig>>
+      name:
+        type: string
+        docs: Unique evaluator name within the project.
+      description:
+        type: optional<nullable<string>>
+        docs: Optional human-readable description.
+      prompt:
+        type: string
+        docs: Prompt template. Variables are derived automatically from `{{variable}}` placeholders.
+      outputDefinition:
+        type: unknown
+        docs: Structured output schema the evaluator must return.
+      modelConfig:
+        type: optional<nullable<commons.EvaluatorModelConfig>>
+        docs: Optional explicit model configuration. If omitted, the project default evaluation model is used.
 
   UpdateEvaluatorRequest:
+    docs: |
+      Partial update body for an evaluator.
+
+      Provide only the fields you want to change.
+      An empty body is rejected.
     properties:
-      name: optional<string>
-      description: optional<nullable<string>>
-      prompt: optional<string>
-      outputDefinition: optional<unknown>
-      modelConfig: optional<nullable<commons.EvaluatorModelConfig>>
+      name:
+        type: optional<string>
+        docs: New unique evaluator name.
+      description:
+        type: optional<nullable<string>>
+        docs: Updated description, or `null` to clear it.
+      prompt:
+        type: optional<string>
+        docs: Updated prompt template. Variables will be re-derived from the new prompt.
+      outputDefinition:
+        type: optional<unknown>
+        docs: Updated structured output schema.
+      modelConfig:
+        type: optional<nullable<commons.EvaluatorModelConfig>>
+        docs: Updated explicit model configuration, or `null` to fall back to the project default evaluation model.
 
   DeleteEvaluatorResponse:
+    docs: Confirmation response returned after successful deletion.
     properties:
-      message: string
+      message:
+        type: string
+        docs: Always `Evaluator successfully deleted`.

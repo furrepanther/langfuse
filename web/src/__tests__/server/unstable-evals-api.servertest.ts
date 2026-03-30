@@ -24,6 +24,8 @@ import {
 } from "@langfuse/shared";
 import { prisma } from "@langfuse/shared/src/db";
 import { createOrgProjectAndApiKey } from "@langfuse/shared/src/server";
+import { UnstablePublicApiErrorResponse } from "@/src/features/public-api/types/unstable-public-evals-contract";
+import type { z } from "zod";
 
 const __orgIds: string[] = [];
 
@@ -31,6 +33,19 @@ const numericOutputDefinition = createNumericEvalOutputDefinition({
   reasoningDescription: "Why the score was assigned",
   scoreDescription: "A score between 0 and 1",
 });
+
+const expectUnstableError = (
+  response: Awaited<ReturnType<typeof makeAPICall>>,
+  params: {
+    status: number;
+    code: z.infer<typeof UnstablePublicApiErrorResponse>["code"];
+  },
+) => {
+  expect(response.status).toBe(params.status);
+  const body = UnstablePublicApiErrorResponse.parse(response.body);
+  expect(body.code).toBe(params.code);
+  return body;
+};
 
 describe("/api/public/unstable evals API", () => {
   let auth: string;
@@ -141,7 +156,10 @@ describe("/api/public/unstable evals API", () => {
       auth,
     );
 
-    expect(missing.status).toBe(404);
+    expectUnstableError(missing, {
+      status: 404,
+      code: "resource_not_found",
+    });
   });
 
   it("prevents deleting evaluators that are referenced by continuous evaluations", async () => {
@@ -183,8 +201,11 @@ describe("/api/public/unstable evals API", () => {
       auth,
     );
 
-    expect(result.status).toBe(409);
-    expect(result.body).toMatchObject({
+    const error = expectUnstableError(result, {
+      status: 409,
+      code: "evaluator_in_use",
+    });
+    expect(error).toMatchObject({
       message:
         "Evaluator cannot be deleted while continuous evaluations still reference it",
     });
@@ -342,7 +363,11 @@ describe("/api/public/unstable evals API", () => {
       auth,
     );
 
-    expect(invalidObservation.status).toBe(400);
+    const invalidObservationError = expectUnstableError(invalidObservation, {
+      status: 400,
+      code: "invalid_body",
+    });
+    expect(invalidObservationError.details).toBeDefined();
 
     const validExperiment = await makeZodVerifiedAPICall(
       PostUnstableContinuousEvaluationResponse,
@@ -409,5 +434,227 @@ describe("/api/public/unstable evals API", () => {
 
     expect(listed.body.meta.totalItems).toBe(0);
     expect(listed.body.data).toEqual([]);
+  });
+
+  it("returns structured auth failures for unstable endpoints", async () => {
+    const response = await makeAPICall(
+      "GET",
+      "/api/public/unstable/evaluators?page=1&limit=10",
+      undefined,
+      `Basic ${Buffer.from("pk-lf-invalid:sk-lf-invalid").toString("base64")}`,
+    );
+
+    const error = expectUnstableError(response, {
+      status: 401,
+      code: "authentication_failed",
+    });
+
+    expect(error.message).toContain(
+      "Confirm that you've configured the correct host.",
+    );
+  });
+
+  it("returns invalid_body for malformed evaluator payloads", async () => {
+    const response = await makeAPICall(
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "",
+        prompt: "Judge {{input}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const error = expectUnstableError(response, {
+      status: 400,
+      code: "invalid_body",
+    });
+
+    expect(error.details).toMatchObject({
+      issues: expect.any(Array),
+    });
+  });
+
+  it("returns detailed invalid_filter_value errors", async () => {
+    const evaluator = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Filter validation evaluator",
+        prompt: "Judge {{input}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const response = await makeAPICall(
+      "POST",
+      "/api/public/unstable/continuous-evaluations",
+      {
+        name: "bad_filter",
+        evaluatorId: evaluator.body.id,
+        target: "observation",
+        enabled: true,
+        sampling: 1,
+        filter: [
+          {
+            type: "stringOptions",
+            column: "type",
+            operator: "any of",
+            value: ["NOT_A_REAL_TYPE"],
+          },
+        ],
+        mapping: [{ variable: "input", source: "input" }],
+      },
+      auth,
+    );
+
+    const error = expectUnstableError(response, {
+      status: 400,
+      code: "invalid_filter_value",
+    });
+
+    expect(error.details).toMatchObject({
+      field: "filter[0].value",
+      column: "type",
+      invalidValues: ["NOT_A_REAL_TYPE"],
+    });
+  });
+
+  it("returns detailed invalid_json_path errors", async () => {
+    const evaluator = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "JsonPath validation evaluator",
+        prompt: "Judge {{input}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const response = await makeAPICall(
+      "POST",
+      "/api/public/unstable/continuous-evaluations",
+      {
+        name: "bad_json_path",
+        evaluatorId: evaluator.body.id,
+        target: "observation",
+        enabled: true,
+        sampling: 1,
+        filter: [],
+        mapping: [{ variable: "input", source: "metadata", jsonPath: "$[" }],
+      },
+      auth,
+    );
+
+    const error = expectUnstableError(response, {
+      status: 400,
+      code: "invalid_json_path",
+    });
+
+    expect(error.details).toMatchObject({
+      field: "mapping[0].jsonPath",
+      variable: "input",
+      value: "$[",
+    });
+  });
+
+  it("returns detailed mapping coverage errors", async () => {
+    const evaluator = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Mapping validation evaluator",
+        prompt: "Judge {{input}} and {{output}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const missingResponse = await makeAPICall(
+      "POST",
+      "/api/public/unstable/continuous-evaluations",
+      {
+        name: "missing_mapping",
+        evaluatorId: evaluator.body.id,
+        target: "observation",
+        enabled: true,
+        sampling: 1,
+        filter: [],
+        mapping: [{ variable: "input", source: "input" }],
+      },
+      auth,
+    );
+
+    const missingError = expectUnstableError(missingResponse, {
+      status: 400,
+      code: "missing_variable_mapping",
+    });
+
+    expect(missingError.details).toMatchObject({
+      field: "mapping",
+      variables: ["output"],
+    });
+
+    const duplicateResponse = await makeAPICall(
+      "POST",
+      "/api/public/unstable/continuous-evaluations",
+      {
+        name: "duplicate_mapping",
+        evaluatorId: evaluator.body.id,
+        target: "observation",
+        enabled: true,
+        sampling: 1,
+        filter: [],
+        mapping: [
+          { variable: "input", source: "input" },
+          { variable: "input", source: "metadata" },
+        ],
+      },
+      auth,
+    );
+
+    const duplicateError = expectUnstableError(duplicateResponse, {
+      status: 400,
+      code: "duplicate_variable_mapping",
+    });
+
+    expect(duplicateError.details).toMatchObject({
+      field: "mapping",
+      variable: "input",
+    });
+  });
+
+  it("returns 422 when enabled evaluators cannot pass preflight", async () => {
+    const response = await makeAPICall(
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Broken evaluator",
+        prompt: "Judge {{input}}",
+        outputDefinition: numericOutputDefinition,
+        modelConfig: {
+          provider: "definitely-not-configured",
+          model: "missing-model",
+        },
+      },
+      auth,
+    );
+
+    const error = expectUnstableError(response, {
+      status: 422,
+      code: "evaluator_preflight_failed",
+    });
+
+    expect(error.details).toMatchObject({
+      evaluatorName: "Broken evaluator",
+      provider: "definitely-not-configured",
+      model: "missing-model",
+    });
   });
 });

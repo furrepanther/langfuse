@@ -14,6 +14,13 @@ import { RateLimitService } from "@/src/features/public-api/server/RateLimitServ
 import { contextWithLangfuseProps } from "@langfuse/shared/src/server";
 import * as opentelemetry from "@opentelemetry/api";
 import { env } from "@/src/env.mjs";
+import { isZodError } from "@/src/features/public-api/server/withMiddlewares";
+import {
+  createUnstablePublicApiAuthError,
+  createUnstablePublicApiRequestValidationError,
+  sendUnstablePublicApiErrorResponse,
+  type PublicApiErrorFormat,
+} from "@/src/features/public-api/server/unstable-public-api-errors";
 
 type RouteConfig<
   TQuery extends ZodType<any>,
@@ -40,6 +47,7 @@ type RouteConfig<
    * @default false
    */
   isAdminApiKeyAuthAllowed?: boolean;
+  errorFormat?: PublicApiErrorFormat;
   fn: (params: {
     query: z.infer<TQuery>;
     body: z.infer<TBody>;
@@ -253,6 +261,13 @@ export const createAuthedProjectAPIRoute = <
       const statusCode = error.status || 401;
       const message = error.message || "Authentication failed";
 
+      if (routeConfig.errorFormat === "unstable-public-evals") {
+        return sendUnstablePublicApiErrorResponse(
+          res,
+          createUnstablePublicApiAuthError({ statusCode, message }),
+        );
+      }
+
       res.status(statusCode).json({ message });
 
       return;
@@ -265,7 +280,10 @@ export const createAuthedProjectAPIRoute = <
       );
 
     if (rateLimitResponse?.isRateLimited()) {
-      return rateLimitResponse.sendRestResponseIfLimited(res);
+      return rateLimitResponse.sendRestResponseIfLimited(
+        res,
+        routeConfig.errorFormat,
+      );
     }
 
     logger.debug(
@@ -276,12 +294,49 @@ export const createAuthedProjectAPIRoute = <
       },
     );
 
-    const query = routeConfig.querySchema
-      ? routeConfig.querySchema.parse(req.query)
-      : ({} as z.infer<TQuery>);
-    const body = routeConfig.bodySchema
-      ? routeConfig.bodySchema.parse(req.body)
-      : ({} as z.infer<TBody>);
+    let query: z.infer<TQuery>;
+    try {
+      query = routeConfig.querySchema
+        ? routeConfig.querySchema.parse(req.query)
+        : ({} as z.infer<TQuery>);
+    } catch (error) {
+      if (
+        routeConfig.errorFormat === "unstable-public-evals" &&
+        isZodError(error)
+      ) {
+        return sendUnstablePublicApiErrorResponse(
+          res,
+          createUnstablePublicApiRequestValidationError({
+            error,
+            requestPart: "query",
+          }),
+        );
+      }
+
+      throw error;
+    }
+
+    let body: z.infer<TBody>;
+    try {
+      body = routeConfig.bodySchema
+        ? routeConfig.bodySchema.parse(req.body)
+        : ({} as z.infer<TBody>);
+    } catch (error) {
+      if (
+        routeConfig.errorFormat === "unstable-public-evals" &&
+        isZodError(error)
+      ) {
+        return sendUnstablePublicApiErrorResponse(
+          res,
+          createUnstablePublicApiRequestValidationError({
+            error,
+            requestPart: "body",
+          }),
+        );
+      }
+
+      throw error;
+    }
 
     const ctx = contextWithLangfuseProps({
       headers: req.headers,

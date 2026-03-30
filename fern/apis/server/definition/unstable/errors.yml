@@ -1,0 +1,132 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+types:
+  PublicApiErrorCode:
+    docs: |
+      Machine-readable error code returned by the unstable evaluators API.
+
+      SDKs, CLIs, and agents should branch on `code` rather than parsing the human-readable `message`.
+      The HTTP status still indicates the broad error class, while `code` gives the specific failure reason.
+    enum:
+      - authentication_failed
+      - access_denied
+      - invalid_request
+      - invalid_query
+      - invalid_body
+      - invalid_filter_value
+      - invalid_json_path
+      - invalid_variable_mapping
+      - missing_variable_mapping
+      - duplicate_variable_mapping
+      - resource_not_found
+      - name_conflict
+      - evaluator_in_use
+      - evaluator_preflight_failed
+      - conflict
+      - unprocessable_content
+      - rate_limited
+      - method_not_allowed
+      - internal_error
+
+  PublicApiError:
+    docs: |
+      Standard error envelope for the unstable evaluators API.
+
+      Response handling guidance:
+      - Use the HTTP status code for the broad class of failure.
+      - Use `code` for precise branching in SDKs, CLIs, or agents.
+      - Inspect `details` for field-level validation context such as invalid filter values, malformed JSONPath expressions, or missing variable mappings.
+    properties:
+      message:
+        type: string
+        docs: Human-readable description of the failure.
+      code:
+        type: PublicApiErrorCode
+        docs: Stable machine-readable error code.
+      details:
+        type: optional<unknown>
+        docs: |
+          Optional structured error context.
+
+          Examples:
+          - Validation issues for malformed request bodies
+          - `field`, `column`, and `invalidValues` for filter validation
+          - `field`, `variable`, and `value` for malformed JSONPath selectors
+          - `variables` for missing prompt variable mappings
+      requestId:
+        type: optional<string>
+        docs: Optional request identifier for correlating client-side failures with server logs.
+    examples:
+      - name: InvalidFilterValue
+        value:
+          message: 'Filter column "type" contains unsupported value(s): INVALID'
+          code: invalid_filter_value
+          details:
+            field: filter[0].value
+            column: type
+            invalidValues:
+              - INVALID
+            allowedValues:
+              - GENERATION
+              - SPAN
+              - EVENT
+      - name: EvaluatorPreflightFailed
+        value:
+          message: 'No valid LLM model found for evaluator "answer-correctness". No default model or custom model configured for project project_123'
+          code: evaluator_preflight_failed
+          details:
+            evaluatorName: answer-correctness
+            provider: null
+            model: null
+
+errors:
+  BadRequestError:
+    docs: |
+      Request parsing or validation failed.
+
+      Typical unstable-eval examples:
+      - malformed request body or query parameters
+      - unsupported filter value
+      - invalid JSONPath selector
+      - missing or duplicate variable mappings
+    status-code: 400
+    type: PublicApiError
+  UnauthorizedError:
+    docs: Authentication failed.
+    status-code: 401
+    type: PublicApiError
+  AccessDeniedError:
+    docs: Authenticated, but the caller is not allowed to access the requested resource.
+    status-code: 403
+    type: PublicApiError
+  NotFoundError:
+    docs: The requested evaluator or continuous evaluation does not exist within the authorized project.
+    status-code: 404
+    type: PublicApiError
+  MethodNotAllowedError:
+    docs: The HTTP method is not supported for this endpoint.
+    status-code: 405
+    type: PublicApiError
+  ConflictError:
+    docs: |
+      The request conflicts with existing state.
+
+      Typical unstable-eval examples:
+      - evaluator name already exists in the project
+      - evaluator cannot be deleted because continuous evaluations still reference it
+    status-code: 409
+    type: PublicApiError
+  UnprocessableContentError:
+    docs: |
+      The request is syntactically valid, but Langfuse cannot accept it in its current form.
+
+      The most important unstable-eval case is `code=evaluator_preflight_failed`, which means the evaluator cannot currently run with the resolved model configuration.
+    status-code: 422
+    type: PublicApiError
+  TooManyRequestsError:
+    docs: The project is rate limited. Retry after the interval described in the response headers and error details.
+    status-code: 429
+    type: PublicApiError
+  InternalServerError:
+    docs: An unexpected server-side error occurred.
+    status-code: 500
+    type: PublicApiError

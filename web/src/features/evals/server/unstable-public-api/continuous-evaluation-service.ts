@@ -15,6 +15,7 @@ import {
   listPublicContinuousEvaluationConfigs,
   loadEvaluatorForContinuousEvaluation,
 } from "./queries";
+import { assertEvaluatorDefinitionCanRunForPublicApi } from "./validation";
 
 export async function listPublicContinuousEvaluations(params: {
   projectId: string;
@@ -63,6 +64,19 @@ export async function createPublicContinuousEvaluation(params: {
     },
     evaluatorVariables: deriveEvaluatorVariables(template),
   });
+
+  if (data.status === JobConfigState.ACTIVE) {
+    await assertEvaluatorDefinitionCanRunForPublicApi({
+      projectId: params.projectId,
+      template: {
+        name: template.name,
+        provider: template.provider,
+        model: template.model,
+        modelParams: template.modelParams,
+        outputDefinition: template.outputDefinition,
+      },
+    });
+  }
 
   const created = await prisma.jobConfiguration.create({
     data: {
@@ -116,6 +130,14 @@ export async function updatePublicContinuousEvaluation(params: {
     evaluatorId: nextEvaluatorId,
   });
   const nextTarget = params.input.target ?? existingPublic.target;
+  const nextFilter =
+    "filter" in params.input && params.input.filter !== undefined
+      ? params.input.filter
+      : existingPublic.filter;
+  const nextMapping =
+    "mapping" in params.input && params.input.mapping !== undefined
+      ? params.input.mapping
+      : existingPublic.mapping;
 
   const data = toJobConfigurationInput({
     input: {
@@ -123,11 +145,25 @@ export async function updatePublicContinuousEvaluation(params: {
       target: nextTarget,
       enabled: params.input.enabled ?? existingPublic.enabled,
       sampling: params.input.sampling ?? existingPublic.sampling,
-      filter: params.input.filter ?? existingPublic.filter,
-      mapping: params.input.mapping ?? existingPublic.mapping,
+      filter: nextFilter,
+      mapping: nextMapping,
     },
     evaluatorVariables: deriveEvaluatorVariables(template),
   });
+  const shouldResetBlockState = data.status === JobConfigState.ACTIVE;
+
+  if (shouldResetBlockState) {
+    await assertEvaluatorDefinitionCanRunForPublicApi({
+      projectId: params.projectId,
+      template: {
+        name: template.name,
+        provider: template.provider,
+        model: template.model,
+        modelParams: template.modelParams,
+        outputDefinition: template.outputDefinition,
+      },
+    });
+  }
 
   const updated = await prisma.jobConfiguration.update({
     where: {
@@ -142,9 +178,13 @@ export async function updatePublicContinuousEvaluation(params: {
       variableMapping: data.variableMapping,
       sampling: data.sampling,
       status: data.status,
-      blockedAt: null,
-      blockReason: null,
-      blockMessage: null,
+      ...(shouldResetBlockState
+        ? {
+            blockedAt: null,
+            blockReason: null,
+            blockMessage: null,
+          }
+        : {}),
     },
     include: {
       evalTemplate: {

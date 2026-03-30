@@ -6097,11 +6097,35 @@ paths:
   /api/public/unstable/continuous-evaluations:
     post:
       description: >-
-        Create a continuous evaluation on the unstable public API.
+        Create a continuous evaluation.
 
 
-        Continuous evaluations define which observations or experiments should
-        be evaluated during live ingestion.
+        A continuous evaluation defines **what** incoming data should be
+        evaluated and **how prompt variables should be populated** from that
+        data. It references an existing evaluator and deploys it against live
+        ingestion.
+
+
+        Use this resource after creating an evaluator.
+
+
+        Key rules:
+
+        - `target` must be `observation` or `experiment`
+
+        - every evaluator prompt variable must be mapped exactly once
+
+        - `expected_output` mappings are only valid for `target=experiment`
+
+        - if `enabled=true`, Langfuse validates that the referenced evaluator
+        can currently run
+
+
+        Current scope:
+
+        - continuous evaluations are live-ingestion rules only
+
+        - they do not trigger historical backfills
       operationId: unstable_continuousEvaluations_create
       tags:
         - UnstableContinuousEvaluations
@@ -6113,6 +6137,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/unstableContinuousEvaluation'
+              examples:
+                CreateObservationContinuousEvaluation:
+                  value:
+                    id: ceval_123
+                    name: answer-correctness-live
+                    evaluatorId: eval_123
+                    target: observation
+                    enabled: true
+                    status: active
+                    sampling: 1
+                    filter:
+                      - type: stringOptions
+                        column: type
+                        operator: any of
+                        value:
+                          - GENERATION
+                    mapping:
+                      - variable: input
+                        source: input
+                      - variable: output
+                        source: output
+                    createdAt: '2026-03-30T09:20:00.000Z'
+                    updatedAt: '2026-03-30T09:20:00.000Z'
+                CreateExperimentContinuousEvaluation:
+                  value:
+                    id: ceval_456
+                    name: experiment-expected-output-match
+                    evaluatorId: eval_456
+                    target: experiment
+                    enabled: true
+                    status: active
+                    sampling: 0.5
+                    filter:
+                      - type: stringOptions
+                        column: datasetId
+                        operator: any of
+                        value:
+                          - dataset-prod
+                    mapping:
+                      - variable: output
+                        source: output
+                      - variable: expected_output
+                        source: expected_output
+                    createdAt: '2026-03-30T09:30:00.000Z'
+                    updatedAt: '2026-03-30T09:30:00.000Z'
         '400':
           description: ''
           content:
@@ -6138,6 +6207,24 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
       requestBody:
@@ -6146,22 +6233,64 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/unstableCreateContinuousEvaluationRequest'
+            examples:
+              CreateObservationContinuousEvaluation:
+                value:
+                  name: answer-correctness-live
+                  evaluatorId: eval_123
+                  target: observation
+                  enabled: true
+                  sampling: 1
+                  filter:
+                    - type: stringOptions
+                      column: type
+                      operator: any of
+                      value:
+                        - GENERATION
+                  mapping:
+                    - variable: input
+                      source: input
+                    - variable: output
+                      source: output
+              CreateExperimentContinuousEvaluation:
+                value:
+                  name: experiment-expected-output-match
+                  evaluatorId: eval_456
+                  target: experiment
+                  enabled: true
+                  sampling: 0.5
+                  filter:
+                    - type: stringOptions
+                      column: datasetId
+                      operator: any of
+                      value:
+                        - dataset-prod
+                  mapping:
+                    - variable: output
+                      source: output
+                    - variable: expected_output
+                      source: expected_output
     get:
-      description: List continuous evaluations on the unstable public API.
+      description: >-
+        List continuous evaluations in the authenticated project.
+
+
+        Each item describes the effective deployment state of one evaluator
+        against live ingestion.
       operationId: unstable_continuousEvaluations_list
       tags:
         - UnstableContinuousEvaluations
       parameters:
         - name: page
           in: query
-          description: Page number, starts at 1.
+          description: 1-based page number. Defaults to `1`.
           required: false
           schema:
             type: integer
             nullable: true
         - name: limit
           in: query
-          description: Limit of items per page.
+          description: Maximum number of items per page. Defaults to `50`.
           required: false
           schema:
             type: integer
@@ -6198,18 +6327,37 @@ paths:
           content:
             application/json:
               schema: {}
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
   /api/public/unstable/continuous-evaluations/{continuousEvaluationId}:
     get:
-      description: Get a continuous evaluation on the unstable public API.
+      description: >-
+        Get one continuous evaluation by its identifier.
+
+
+        Use this endpoint to inspect the current target, mapping, filters, and
+        effective runtime status.
       operationId: unstable_continuousEvaluations_get
       tags:
         - UnstableContinuousEvaluations
       parameters:
         - name: continuousEvaluationId
           in: path
-          description: Continuous evaluation identifier.
+          description: >-
+            Continuous evaluation identifier returned by the continuous
+            evaluation endpoints.
           required: true
           schema:
             type: string
@@ -6245,10 +6393,47 @@ paths:
           content:
             application/json:
               schema: {}
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
     patch:
-      description: Update a continuous evaluation on the unstable public API.
+      description: >-
+        Update a continuous evaluation.
+
+
+        Typical uses:
+
+        - enable or disable live execution
+
+        - switch to another evaluator
+
+        - adjust sampling
+
+        - change filters
+
+        - update variable mappings
+
+
+        Important behavior:
+
+        - provide only the fields you want to change
+
+        - changing `target`, `filter`, or `mapping` must still produce a valid
+        target-specific configuration
+
+        - if the resulting config is enabled, Langfuse re-validates that the
+        referenced evaluator can run
       operationId: unstable_continuousEvaluations_update
       tags:
         - UnstableContinuousEvaluations
@@ -6291,6 +6476,24 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
       requestBody:
@@ -6300,7 +6503,12 @@ paths:
             schema:
               $ref: '#/components/schemas/unstableUpdateContinuousEvaluationRequest'
     delete:
-      description: Delete a continuous evaluation on the unstable public API.
+      description: >-
+        Delete a continuous evaluation.
+
+
+        This removes the live-ingestion rule only. It does not delete the
+        referenced evaluator.
       operationId: unstable_continuousEvaluations_delete
       tags:
         - UnstableContinuousEvaluations
@@ -6344,16 +6552,54 @@ paths:
           content:
             application/json:
               schema: {}
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
   /api/public/unstable/evaluators:
     post:
       description: >-
-        Create an evaluator on the unstable public API.
+        Create a reusable evaluator definition.
 
 
-        Evaluators define reusable scoring logic. This unstable surface may
-        change as the evaluation data model evolves.
+        Use this resource to define **how** Langfuse should score data. An
+        evaluator contains the prompt, output schema, and optional model
+        configuration, but it does **not** decide which live objects are
+        evaluated. To deploy an evaluator against ingested data, create a
+        `continuous-evaluation` separately.
+
+
+        Recommended workflow:
+
+        1. Create the evaluator.
+
+        2. Read the returned `variables` array.
+
+        3. Create one or more continuous evaluations that reference the
+        evaluator and map every variable.
+
+
+        Update behavior:
+
+        - The public API exposes evaluators as a single mutable resource.
+
+        - Internal versioning is intentionally hidden from clients.
+
+
+        Unstable API note:
+
+        - This surface may evolve while the underlying evaluation data model is
+        being redesigned.
       operationId: unstable_evaluators_create
       tags:
         - UnstableEvaluators
@@ -6365,6 +6611,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/unstableEvaluator'
+              examples:
+                CreateAnswerCorrectnessEvaluator:
+                  value:
+                    id: eval_123
+                    name: answer-correctness
+                    description: >-
+                      Scores whether the final answer is correct for the given
+                      input.
+                    type: llm_as_judge
+                    prompt: |
+                      You are grading an answer.
+
+                      Input:
+                      {{input}}
+
+                      Output:
+                      {{output}}
+
+                      Return a score between 0 and 1.
+                    variables:
+                      - input
+                      - output
+                    outputDefinition:
+                      version: 1
+                      dataType: NUMERIC
+                      reasoning:
+                        description: Explain why the score was assigned.
+                      score:
+                        description: Correctness score between 0 and 1.
+                    modelConfig:
+                      provider: openai
+                      model: gpt-4.1-mini
+                      modelParams:
+                        temperature: 0
+                    continuousEvaluationCount: 0
+                    createdAt: '2026-03-30T09:00:00.000Z'
+                    updatedAt: '2026-03-30T09:00:00.000Z'
         '400':
           description: ''
           content:
@@ -6390,6 +6673,30 @@ paths:
           content:
             application/json:
               schema: {}
+        '409':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '422':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
       requestBody:
@@ -6398,22 +6705,56 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/unstableCreateEvaluatorRequest'
+            examples:
+              CreateAnswerCorrectnessEvaluator:
+                value:
+                  name: answer-correctness
+                  description: >-
+                    Scores whether the final answer is correct for the given
+                    input.
+                  prompt: |
+                    You are grading an answer.
+
+                    Input:
+                    {{input}}
+
+                    Output:
+                    {{output}}
+
+                    Return a score between 0 and 1.
+                  outputDefinition:
+                    version: 1
+                    dataType: NUMERIC
+                    reasoning:
+                      description: Explain why the score was assigned.
+                    score:
+                      description: Correctness score between 0 and 1.
+                  modelConfig:
+                    provider: openai
+                    model: gpt-4.1-mini
+                    modelParams:
+                      temperature: 0
     get:
-      description: List evaluators on the unstable public API.
+      description: >-
+        List evaluators in the authenticated project.
+
+
+        This endpoint returns the current public evaluator state only. It does
+        not expose internal evaluator version history.
       operationId: unstable_evaluators_list
       tags:
         - UnstableEvaluators
       parameters:
         - name: page
           in: query
-          description: Page number, starts at 1.
+          description: 1-based page number. Defaults to `1`.
           required: false
           schema:
             type: integer
             nullable: true
         - name: limit
           in: query
-          description: Limit of items per page.
+          description: Maximum number of items per page. Defaults to `50`.
           required: false
           schema:
             type: integer
@@ -6450,18 +6791,38 @@ paths:
           content:
             application/json:
               schema: {}
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
   /api/public/unstable/evaluators/{evaluatorId}:
     get:
-      description: Get an evaluator on the unstable public API.
+      description: >-
+        Get one evaluator by its stable public identifier.
+
+
+        Use this endpoint when you need the current prompt, output definition,
+        and derived variables before creating or updating a continuous
+        evaluation.
       operationId: unstable_evaluators_get
       tags:
         - UnstableEvaluators
       parameters:
         - name: evaluatorId
           in: path
-          description: Stable evaluator identifier.
+          description: >-
+            Stable public evaluator identifier returned by the evaluator
+            endpoints.
           required: true
           schema:
             type: string
@@ -6497,17 +6858,51 @@ paths:
           content:
             application/json:
               schema: {}
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
     patch:
-      description: Update an evaluator on the unstable public API.
+      description: >-
+        Update the current public state of an evaluator.
+
+
+        Typical uses:
+
+        - rename the evaluator
+
+        - refine the prompt
+
+        - change the output schema
+
+        - switch to a different evaluation model
+
+
+        Important behavior:
+
+        - Any provided fields replace the current values.
+
+        - Internal evaluator versioning remains hidden from API clients.
+
+        - If the resulting evaluator cannot run, the request fails with `422`
+        and `code=evaluator_preflight_failed`.
       operationId: unstable_evaluators_update
       tags:
         - UnstableEvaluators
       parameters:
         - name: evaluatorId
           in: path
-          description: Stable evaluator identifier.
+          description: Stable public evaluator identifier.
           required: true
           schema:
             type: string
@@ -6543,6 +6938,30 @@ paths:
           content:
             application/json:
               schema: {}
+        '409':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '422':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
       requestBody:
@@ -6552,14 +6971,22 @@ paths:
             schema:
               $ref: '#/components/schemas/unstableUpdateEvaluatorRequest'
     delete:
-      description: Delete an evaluator on the unstable public API.
+      description: >-
+        Delete an evaluator.
+
+
+        Deletion is only allowed when no continuous evaluations still reference
+        the evaluator.
+
+        If the evaluator is still in use, the request fails with `409` and
+        `code=evaluator_in_use`.
       operationId: unstable_evaluators_delete
       tags:
         - UnstableEvaluators
       parameters:
         - name: evaluatorId
           in: path
-          description: Stable evaluator identifier.
+          description: Stable public evaluator identifier.
           required: true
           schema:
             type: string
@@ -6595,6 +7022,24 @@ paths:
           content:
             application/json:
               schema: {}
+        '409':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
       security:
         - BasicAuth: []
 components:
@@ -11440,12 +11885,27 @@ components:
       type: string
       enum:
         - llm_as_judge
+      description: >-
+        The evaluator engine type.
+
+
+        The unstable public API currently supports only LLM-as-a-judge
+        evaluators.
     unstableContinuousEvaluationTarget:
       title: unstableContinuousEvaluationTarget
       type: string
       enum:
         - observation
         - experiment
+      description: >-
+        The ingestion object type that should trigger evaluation runs.
+
+
+        - `observation` evaluates live-ingested observations such as
+        generations, spans, and events.
+
+        - `experiment` evaluates live experiment executions and can additionally
+        map `expected_output`.
     unstableContinuousEvaluationStatus:
       title: unstableContinuousEvaluationStatus
       type: string
@@ -11453,6 +11913,16 @@ components:
         - active
         - inactive
         - paused
+      description: >-
+        Effective runtime status of the continuous evaluation.
+
+
+        - `active`: enabled and currently runnable.
+
+        - `inactive`: disabled by configuration.
+
+        - `paused`: enabled, but Langfuse has blocked execution until the
+        underlying issue is resolved.
     unstableContinuousEvaluationMappingSource:
       title: unstableContinuousEvaluationMappingSource
       type: string
@@ -11461,75 +11931,209 @@ components:
         - output
         - metadata
         - expected_output
+      description: >-
+        Source field used to populate a prompt variable.
+
+
+        Use these values when mapping evaluator prompt variables to live data:
+
+        - `input`: the observation or experiment input
+
+        - `output`: the observation or experiment output
+
+        - `metadata`: the observation metadata object
+
+        - `expected_output`: the experiment item expected output. Only valid for
+        `target=experiment`.
     unstableEvaluatorModelConfig:
       title: unstableEvaluatorModelConfig
       type: object
+      description: >-
+        Optional explicit model configuration for an evaluator.
+
+
+        If omitted, Langfuse uses the project's default evaluation model.
+
+        If provided, the model must be runnable for the project at creation or
+        update time.
       properties:
         provider:
           type: string
+          description: Provider identifier, for example `openai` or `anthropic`.
+          example: openai
         model:
           type: string
+          description: >-
+            Model identifier exposed by the provider, for example
+            `gpt-4.1-mini`.
+          example: gpt-4.1-mini
         modelParams:
           type: object
           additionalProperties: true
           nullable: true
+          description: Optional provider-specific model parameters such as temperature.
       required:
         - provider
         - model
     unstableContinuousEvaluationMapping:
       title: unstableContinuousEvaluationMapping
       type: object
+      description: >-
+        Maps one evaluator prompt variable to one source field from the target
+        object.
+
+
+        Every variable extracted from the evaluator prompt must be mapped
+        exactly once.
+
+        Use `jsonPath` only when the source field is a JSON object and you want
+        to project a nested value.
       properties:
         variable:
           type: string
+          description: >-
+            Prompt variable name without braces.
+
+
+            Example: for the prompt `Judge {{input}} against {{output}}`, use
+            `input` and `output`.
+          example: input
         source:
           $ref: '#/components/schemas/unstableContinuousEvaluationMappingSource'
+          description: Source field that should populate the prompt variable.
         jsonPath:
           type: string
           nullable: true
+          description: >-
+            Optional JSONPath selector applied to the selected source before it
+            is passed to the evaluator prompt.
+
+
+            Requirements:
+
+            - Must start with `$`
+
+            - Must be a syntactically valid JSONPath expression
+
+            - Most useful with `source=metadata`
       required:
         - variable
         - source
+    unstableContinuousEvaluationFilter:
+      title: unstableContinuousEvaluationFilter
+      type: object
+      additionalProperties: true
+      description: >-
+        Filter condition used to decide whether a live-ingested target should be
+        evaluated.
+
+
+        Each filter object follows the same filter schema used elsewhere in the
+        Langfuse API.
+
+        The `column`, `operator`, and `value` fields depend on the selected
+        filter `type`.
+
+
+        Common examples:
+
+        - Observation type filter:
+          `{ "type": "stringOptions", "column": "type", "operator": "any of", "value": ["GENERATION"] }`
+        - Observation level filter:
+          `{ "type": "stringOptions", "column": "level", "operator": "any of", "value": ["ERROR"] }`
+        - Experiment dataset filter:
+          `{ "type": "stringOptions", "column": "datasetId", "operator": "any of", "value": ["dataset-prod"] }`
+
+        Target-specific notes:
+
+        - `observation` supports observation-oriented columns such as `type`,
+        `name`, `environment`, `level`, `version`, `traceName`, `userId`,
+        `sessionId`, `tags`, `metadata`, and `parentObservationId`.
+
+        - `experiment` currently supports `datasetId`.
     unstableContinuousEvaluation:
       title: unstableContinuousEvaluation
       type: object
+      description: |-
+        Live-ingestion deployment of an evaluator.
+
+        A continuous evaluation answers:
+        - which evaluator should be used
+        - which target objects should trigger scoring
+        - how often scoring should run
+        - which target fields should populate each evaluator variable
+        - whether the deployment is active, inactive, or paused
       properties:
         id:
           type: string
+          description: Stable continuous evaluation identifier.
+          example: ceval_123
         name:
           type: string
+          description: >-
+            Human-readable deployment name. This is independent from the
+            evaluator name.
+          example: answer-correctness-live
         evaluatorId:
           type: string
+          description: Referenced evaluator identifier.
+          example: eval_123
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
+          description: Target object type that should trigger scoring.
         enabled:
           type: boolean
+          description: Desired enabled state configured by the client.
+          example: true
         status:
           $ref: '#/components/schemas/unstableContinuousEvaluationStatus'
+          description: >-
+            Effective runtime status after Langfuse applies validation and
+            blocking rules.
         pausedReason:
           type: string
           nullable: true
+          description: >-
+            Internal machine-readable reason when `status=paused`, otherwise
+            `null`.
         pausedMessage:
           type: string
           nullable: true
+          description: Human-readable explanation when `status=paused`, otherwise `null`.
         sampling:
           type: number
           format: double
+          description: |-
+            Fraction of matching target objects that should be evaluated.
+
+            Must be greater than `0` and less than or equal to `1`.
+            - `1` means evaluate every matching target.
+            - `0.25` means evaluate approximately 25% of matching targets.
+          example: 1
         filter:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: '#/components/schemas/unstableContinuousEvaluationFilter'
+          description: >-
+            List of filter conditions used to decide whether a target should be
+            evaluated.
         mapping:
           type: array
           items:
             $ref: '#/components/schemas/unstableContinuousEvaluationMapping'
+          description: >-
+            Variable mappings used to populate the evaluator prompt from the
+            live target object.
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the continuous evaluation was created.
+          example: '2026-03-30T09:20:00.000Z'
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the continuous evaluation was last updated.
+          example: '2026-03-30T09:20:00.000Z'
       required:
         - id
         - name
@@ -11545,42 +12149,67 @@ components:
     unstableContinuousEvaluations:
       title: unstableContinuousEvaluations
       type: object
+      description: Paginated list of continuous evaluations.
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/unstableContinuousEvaluation'
+          description: Continuous evaluations in the current page.
         meta:
           $ref: '#/components/schemas/utilsMetaResponse'
+          description: Standard pagination metadata.
       required:
         - data
         - meta
     unstableCreateContinuousEvaluationRequest:
       title: unstableCreateContinuousEvaluationRequest
       type: object
+      description: |-
+        Request body for creating a continuous evaluation.
+
+        Checklist for agents and SDK clients:
+        - reference an existing `evaluatorId`
+        - choose `target=observation` or `target=experiment`
+        - provide a complete variable mapping for every evaluator variable
+        - optionally narrow execution with `filter`
+        - set `enabled=true` only when you want live execution immediately
       properties:
         name:
           type: string
+          description: Human-readable deployment name.
+          example: answer-correctness-live
         evaluatorId:
           type: string
+          description: Identifier of the evaluator to deploy.
+          example: eval_123
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
+          description: Target object type to evaluate.
         enabled:
           type: boolean
+          description: Whether the deployment should be active immediately after creation.
+          example: true
         sampling:
           type: number
           format: double
           nullable: true
+          description: Optional sampling fraction. Defaults to `1`.
         filter:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: '#/components/schemas/unstableContinuousEvaluationFilter'
           nullable: true
+          description: >-
+            Optional filter list. Omit or pass an empty list to evaluate all
+            matching targets for the selected `target`.
         mapping:
           type: array
           items:
             $ref: '#/components/schemas/unstableContinuousEvaluationMapping'
+          description: >-
+            Required variable mappings. Every evaluator variable must appear
+            exactly once.
       required:
         - name
         - evaluatorId
@@ -11590,73 +12219,214 @@ components:
     unstableUpdateContinuousEvaluationRequest:
       title: unstableUpdateContinuousEvaluationRequest
       type: object
+      description: |-
+        Partial update body for a continuous evaluation.
+
+        Provide only the fields you want to change.
+        An empty body is rejected.
       properties:
         name:
           type: string
           nullable: true
+          description: Updated deployment name.
         evaluatorId:
           type: string
           nullable: true
+          description: Updated evaluator identifier.
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
           nullable: true
+          description: Updated target object type.
         enabled:
           type: boolean
           nullable: true
+          description: Updated desired enabled state.
         sampling:
           type: number
           format: double
           nullable: true
+          description: Updated sampling fraction.
         filter:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: '#/components/schemas/unstableContinuousEvaluationFilter'
           nullable: true
+          description: Updated filter list.
         mapping:
           type: array
           items:
             $ref: '#/components/schemas/unstableContinuousEvaluationMapping'
           nullable: true
+          description: Updated variable mappings.
     unstableDeleteContinuousEvaluationResponse:
       title: unstableDeleteContinuousEvaluationResponse
       type: object
+      description: Confirmation response returned after successful deletion.
       properties:
         message:
           type: string
+          description: Always `Continuous evaluation successfully deleted`.
       required:
         - message
+    unstablePublicApiErrorCode:
+      title: unstablePublicApiErrorCode
+      type: string
+      enum:
+        - authentication_failed
+        - access_denied
+        - invalid_request
+        - invalid_query
+        - invalid_body
+        - invalid_filter_value
+        - invalid_json_path
+        - invalid_variable_mapping
+        - missing_variable_mapping
+        - duplicate_variable_mapping
+        - resource_not_found
+        - name_conflict
+        - evaluator_in_use
+        - evaluator_preflight_failed
+        - conflict
+        - unprocessable_content
+        - rate_limited
+        - method_not_allowed
+        - internal_error
+      description: >-
+        Machine-readable error code returned by the unstable evaluators API.
+
+
+        SDKs, CLIs, and agents should branch on `code` rather than parsing the
+        human-readable `message`.
+
+        The HTTP status still indicates the broad error class, while `code`
+        gives the specific failure reason.
+    unstablePublicApiError:
+      title: unstablePublicApiError
+      type: object
+      description: >-
+        Standard error envelope for the unstable evaluators API.
+
+
+        Response handling guidance:
+
+        - Use the HTTP status code for the broad class of failure.
+
+        - Use `code` for precise branching in SDKs, CLIs, or agents.
+
+        - Inspect `details` for field-level validation context such as invalid
+        filter values, malformed JSONPath expressions, or missing variable
+        mappings.
+      properties:
+        message:
+          type: string
+          description: Human-readable description of the failure.
+          example: 'Filter column "type" contains unsupported value(s): INVALID'
+        code:
+          $ref: '#/components/schemas/unstablePublicApiErrorCode'
+          description: Stable machine-readable error code.
+        details:
+          nullable: true
+          description: |-
+            Optional structured error context.
+
+            Examples:
+            - Validation issues for malformed request bodies
+            - `field`, `column`, and `invalidValues` for filter validation
+            - `field`, `variable`, and `value` for malformed JSONPath selectors
+            - `variables` for missing prompt variable mappings
+        requestId:
+          type: string
+          nullable: true
+          description: >-
+            Optional request identifier for correlating client-side failures
+            with server logs.
+      required:
+        - message
+        - code
     unstableEvaluator:
       title: unstableEvaluator
       type: object
+      description: >-
+        Reusable scoring definition.
+
+
+        An evaluator describes **how** to score data:
+
+        - prompt
+
+        - extracted prompt variables
+
+        - output schema
+
+        - optional explicit model configuration
+
+
+        It does not define **which** live objects are evaluated. That is the job
+        of `continuous-evaluations`.
       properties:
         id:
           type: string
+          description: Stable public evaluator identifier.
+          example: eval_123
         name:
           type: string
+          description: Project-scoped evaluator name. Must be unique within the project.
+          example: answer-correctness
         description:
           type: string
           nullable: true
+          description: Optional human-readable description of what the evaluator measures.
         type:
           $ref: '#/components/schemas/unstableEvaluatorType'
+          description: Evaluator engine type. Currently always `llm_as_judge`.
         prompt:
           type: string
+          description: Prompt template used during evaluation.
+          example: |
+            You are grading an answer.
+
+            Input:
+            {{input}}
+
+            Output:
+            {{output}}
         variables:
           type: array
           items:
             type: string
-        outputDefinition: {}
+          description: >-
+            Variables extracted from the evaluator prompt.
+
+
+            Every variable in this list must be mapped exactly once when
+            creating a continuous evaluation.
+          example:
+            - input
+            - output
+        outputDefinition:
+          description: Structured output schema that the evaluator must return.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true
+          description: >-
+            Explicit model configuration, or `null` when the project default
+            evaluation model is used.
         continuousEvaluationCount:
           type: integer
+          description: >-
+            Number of continuous evaluations in the project that currently
+            reference this evaluator.
+          example: 2
         createdAt:
           type: string
           format: date-time
+          description: Timestamp when the public evaluator resource was first created.
+          example: '2026-03-30T09:00:00.000Z'
         updatedAt:
           type: string
           format: date-time
+          description: Timestamp when the public evaluator resource was last updated.
+          example: '2026-03-30T09:15:00.000Z'
       required:
         - id
         - name
@@ -11670,31 +12440,62 @@ components:
     unstableEvaluators:
       title: unstableEvaluators
       type: object
+      description: Paginated list of evaluators.
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/unstableEvaluator'
+          description: Evaluators in the current page.
         meta:
           $ref: '#/components/schemas/utilsMetaResponse'
+          description: Standard pagination metadata.
       required:
         - data
         - meta
     unstableCreateEvaluatorRequest:
       title: unstableCreateEvaluatorRequest
       type: object
+      description: |-
+        Request body for creating an evaluator.
+
+        Minimal pattern:
+        - set `name`
+        - write a prompt with one or more `{{variables}}`
+        - define the expected structured output
+        - optionally pin a specific model configuration
       properties:
         name:
           type: string
+          description: Unique evaluator name within the project.
+          example: answer-correctness
         description:
           type: string
           nullable: true
+          description: Optional human-readable description.
         prompt:
           type: string
-        outputDefinition: {}
+          description: >-
+            Prompt template. Variables are derived automatically from
+            `{{variable}}` placeholders.
+          example: |
+            You are grading an answer.
+
+            Input:
+            {{input}}
+
+            Output:
+            {{output}}
+
+            Return a score between 0 and 1.
+        outputDefinition:
+          description: Structured output schema the evaluator must return.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true
+          description: >-
+            Optional explicit model configuration. If omitted, the project
+            default evaluation model is used.
       required:
         - name
         - prompt
@@ -11702,27 +12503,43 @@ components:
     unstableUpdateEvaluatorRequest:
       title: unstableUpdateEvaluatorRequest
       type: object
+      description: |-
+        Partial update body for an evaluator.
+
+        Provide only the fields you want to change.
+        An empty body is rejected.
       properties:
         name:
           type: string
           nullable: true
+          description: New unique evaluator name.
         description:
           type: string
           nullable: true
+          description: Updated description, or `null` to clear it.
         prompt:
           type: string
           nullable: true
+          description: >-
+            Updated prompt template. Variables will be re-derived from the new
+            prompt.
         outputDefinition:
           nullable: true
+          description: Updated structured output schema.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true
+          description: >-
+            Updated explicit model configuration, or `null` to fall back to the
+            project default evaluation model.
     unstableDeleteEvaluatorResponse:
       title: unstableDeleteEvaluatorResponse
       type: object
+      description: Confirmation response returned after successful deletion.
       properties:
         message:
           type: string
+          description: Always `Evaluator successfully deleted`.
       required:
         - message
     utilsMetaResponse:

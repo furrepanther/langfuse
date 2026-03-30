@@ -12,39 +12,44 @@ import {
   PostUnstableContinuousEvaluationResponse,
 } from "@/src/features/public-api/types/unstable-continuous-evaluations";
 
-export default withMiddlewares({
-  GET: createAuthedProjectAPIRoute({
-    name: "List Unstable Continuous Evaluations",
-    querySchema: GetUnstableContinuousEvaluationsQuery,
-    responseSchema: GetUnstableContinuousEvaluationsResponse,
-    fn: async ({ query, auth }) =>
-      listPublicContinuousEvaluations({
-        projectId: auth.scope.projectId,
-        page: query.page,
-        limit: query.limit,
-      }),
-  }),
-  POST: createAuthedProjectAPIRoute({
-    name: "Create Unstable Continuous Evaluation",
-    bodySchema: PostUnstableContinuousEvaluationBody,
-    responseSchema: PostUnstableContinuousEvaluationResponse,
-    fn: async ({ body, auth }) => {
-      const continuousEvaluation = await createPublicContinuousEvaluation({
-        projectId: auth.scope.projectId,
-        input: body,
-      });
+export default withMiddlewares(
+  {
+    GET: createAuthedProjectAPIRoute({
+      name: "List Unstable Continuous Evaluations",
+      querySchema: GetUnstableContinuousEvaluationsQuery,
+      responseSchema: GetUnstableContinuousEvaluationsResponse,
+      errorFormat: "unstable-public-evals",
+      fn: async ({ query, auth }) =>
+        listPublicContinuousEvaluations({
+          projectId: auth.scope.projectId,
+          page: query.page,
+          limit: query.limit,
+        }),
+    }),
+    POST: createAuthedProjectAPIRoute({
+      name: "Create Unstable Continuous Evaluation",
+      bodySchema: PostUnstableContinuousEvaluationBody,
+      responseSchema: PostUnstableContinuousEvaluationResponse,
+      errorFormat: "unstable-public-evals",
+      fn: async ({ body, auth }) => {
+        const continuousEvaluation = await createPublicContinuousEvaluation({
+          projectId: auth.scope.projectId,
+          input: body,
+        });
 
-      await auditLog({
-        action: "create",
-        resourceType: "job",
-        resourceId: continuousEvaluation.id,
-        projectId: auth.scope.projectId,
-        orgId: auth.scope.orgId,
-        apiKeyId: auth.scope.apiKeyId,
-        after: continuousEvaluation,
-      });
+        await auditLog({
+          action: "create",
+          resourceType: "job",
+          resourceId: continuousEvaluation.id,
+          projectId: auth.scope.projectId,
+          orgId: auth.scope.orgId,
+          apiKeyId: auth.scope.apiKeyId,
+          after: continuousEvaluation,
+        });
 
-      return continuousEvaluation;
-    },
-  }),
-});
+        return continuousEvaluation;
+      },
+    }),
+  },
+  { errorFormat: "unstable-public-evals" },
+);

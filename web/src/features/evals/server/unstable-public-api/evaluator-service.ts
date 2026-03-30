@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { extractVariables, LangfuseConflictError } from "@langfuse/shared";
+import { extractVariables } from "@langfuse/shared";
 import { prisma } from "@langfuse/shared/src/db";
 import type {
   PatchUnstableEvaluatorBodyType,
@@ -17,7 +17,11 @@ import {
   findEvaluatorTemplateVersionsOrThrow,
   listPublicEvaluatorTemplateGroups,
 } from "./queries";
-import { assertEvaluatorNameIsAvailable } from "./validation";
+import {
+  assertEvaluatorDefinitionCanRunForPublicApi,
+  assertEvaluatorNameIsAvailable,
+} from "./validation";
+import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-errors";
 
 export async function listPublicEvaluators(params: {
   projectId: string;
@@ -72,6 +76,17 @@ export async function createPublicEvaluator(params: {
   projectId: string;
   input: PostUnstableEvaluatorBodyType;
 }) {
+  await assertEvaluatorDefinitionCanRunForPublicApi({
+    projectId: params.projectId,
+    template: {
+      name: params.input.name,
+      provider: params.input.modelConfig?.provider ?? null,
+      model: params.input.modelConfig?.model ?? null,
+      modelParams: params.input.modelConfig?.modelParams,
+      outputDefinition: params.input.outputDefinition,
+    },
+  });
+
   return prisma.$transaction(async (tx) => {
     await assertEvaluatorNameIsAvailable({
       client: tx,
@@ -117,26 +132,38 @@ export async function updatePublicEvaluator(params: {
   evaluatorId: string;
   input: PatchUnstableEvaluatorBodyType;
 }) {
-  return prisma.$transaction(async (tx) => {
-    const templates = await findEvaluatorTemplateVersionsOrThrow({
-      client: tx,
-      projectId: params.projectId,
-      evaluatorId: params.evaluatorId,
-    });
-    const latestTemplate = templates[templates.length - 1]!;
-    const nextName = params.input.name ?? latestTemplate.name;
+  const templates = await findEvaluatorTemplateVersionsOrThrow({
+    projectId: params.projectId,
+    evaluatorId: params.evaluatorId,
+  });
+  const latestTemplate = templates[templates.length - 1]!;
+  const nextName = params.input.name ?? latestTemplate.name;
+  const nextPrompt = params.input.prompt ?? latestTemplate.prompt;
+  const nextModelConfig = toStoredModelConfig(
+    params.input.modelConfig ?? toApiModelConfig(latestTemplate),
+  );
+  const nextOutputDefinition =
+    params.input.outputDefinition ??
+    parseStoredOutputDefinition(latestTemplate);
 
+  await assertEvaluatorDefinitionCanRunForPublicApi({
+    projectId: params.projectId,
+    template: {
+      name: nextName,
+      provider: nextModelConfig.provider,
+      model: nextModelConfig.model,
+      modelParams: nextModelConfig.modelParams,
+      outputDefinition: nextOutputDefinition,
+    },
+  });
+
+  return prisma.$transaction(async (tx) => {
     await assertEvaluatorNameIsAvailable({
       client: tx,
       projectId: params.projectId,
       name: nextName,
       evaluatorId: params.evaluatorId,
     });
-
-    const nextPrompt = params.input.prompt ?? latestTemplate.prompt;
-    const nextModelConfig = toStoredModelConfig(
-      params.input.modelConfig ?? toApiModelConfig(latestTemplate),
-    );
 
     const createdTemplate = await tx.evalTemplate.create({
       data: {
@@ -153,9 +180,7 @@ export async function updatePublicEvaluator(params: {
         model: nextModelConfig.model,
         modelParams: nextModelConfig.modelParams,
         vars: extractVariables(nextPrompt),
-        outputDefinition:
-          params.input.outputDefinition ??
-          parseStoredOutputDefinition(latestTemplate),
+        outputDefinition: nextOutputDefinition,
       },
     });
 
@@ -194,9 +219,12 @@ export async function deletePublicEvaluator(params: {
     await countContinuousEvaluationsForEvaluator(params);
 
   if (continuousEvaluationCount > 0) {
-    throw new LangfuseConflictError(
-      "Evaluator cannot be deleted while continuous evaluations still reference it",
-    );
+    throw createUnstablePublicApiError({
+      httpCode: 409,
+      code: "evaluator_in_use",
+      message:
+        "Evaluator cannot be deleted while continuous evaluations still reference it",
+    });
   }
 
   await prisma.evalTemplate.deleteMany({

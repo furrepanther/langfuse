@@ -24,7 +24,10 @@ import type {
   StoredPublicContinuousEvaluationConfig,
   StoredPublicEvaluatorTemplate,
 } from "./types";
-import { validateEvaluatorVariableMappings } from "./validation";
+import {
+  validateContinuousEvaluationFilters,
+  validateEvaluatorVariableMappings,
+} from "./validation";
 
 const PUBLIC_TARGET_TO_INTERNAL_TARGET_OBJECT: Record<
   PublicContinuousEvaluationTargetType,
@@ -140,11 +143,15 @@ export function toApiModelConfig(
 function toApiContinuousEvaluationStatus(
   config: Pick<StoredPublicContinuousEvaluationConfig, "status" | "blockedAt">,
 ): ApiContinuousEvaluationRecord["status"] {
+  if (config.status === JobConfigState.INACTIVE) {
+    return "inactive";
+  }
+
   if (config.blockedAt) {
     return "paused";
   }
 
-  return config.status === JobConfigState.ACTIVE ? "active" : "inactive";
+  return "active";
 }
 
 function assertPublicTarget(
@@ -320,6 +327,10 @@ export function toJobConfigurationInput(params: {
   };
   evaluatorVariables: string[];
 }) {
+  validateContinuousEvaluationFilters({
+    target: params.input.target,
+    filters: params.input.filter,
+  });
   validateEvaluatorVariableMappings({
     mappings: params.input.mapping,
     variables: params.evaluatorVariables,

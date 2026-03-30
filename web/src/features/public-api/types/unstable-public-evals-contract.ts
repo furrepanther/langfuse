@@ -20,6 +20,46 @@ import { z } from "zod";
 
 export const PublicEvaluatorType = z.literal("llm_as_judge");
 
+export const UnstablePublicApiErrorCode = z.enum([
+  "authentication_failed",
+  "access_denied",
+  "invalid_request",
+  "invalid_query",
+  "invalid_body",
+  "invalid_filter_value",
+  "invalid_json_path",
+  "invalid_variable_mapping",
+  "missing_variable_mapping",
+  "duplicate_variable_mapping",
+  "resource_not_found",
+  "name_conflict",
+  "evaluator_in_use",
+  "evaluator_preflight_failed",
+  "conflict",
+  "unprocessable_content",
+  "rate_limited",
+  "method_not_allowed",
+  "internal_error",
+]);
+
+export const UnstablePublicApiRateLimitDetails = z
+  .object({
+    retryAfterSeconds: z.number().int().positive().optional(),
+    limit: z.number().int().positive().optional(),
+    remaining: z.number().int().nonnegative().optional(),
+    resetAt: z.string().optional(),
+  })
+  .strict();
+
+export const UnstablePublicApiErrorResponse = z
+  .object({
+    message: z.string(),
+    code: UnstablePublicApiErrorCode,
+    details: z.unknown().optional(),
+    requestId: z.string().optional(),
+  })
+  .strict();
+
 export const PublicEvaluatorModelConfig = z
   .object({
     provider: z.string().min(1),
@@ -152,6 +192,9 @@ export const PublicContinuousEvaluationFilter = z.union([
 
 export type PublicEvaluatorModelConfigType = z.infer<
   typeof PublicEvaluatorModelConfig
+>;
+export type UnstablePublicApiErrorCodeType = z.infer<
+  typeof UnstablePublicApiErrorCode
 >;
 export type PublicContinuousEvaluationTargetType = z.infer<
   typeof PublicContinuousEvaluationTarget

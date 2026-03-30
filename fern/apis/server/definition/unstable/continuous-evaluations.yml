@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 imports:
   commons: ./commons.yml
+  errors: ./errors.yml
   pagination: ../utils/pagination.yml
 
 service:
@@ -9,16 +10,127 @@ service:
   endpoints:
     create:
       docs: |
-        Create a continuous evaluation on the unstable public API.
+        Create a continuous evaluation.
 
-        Continuous evaluations define which observations or experiments should be evaluated during live ingestion.
+        A continuous evaluation defines **what** incoming data should be evaluated and **how prompt variables should be populated** from that data. It references an existing evaluator and deploys it against live ingestion.
+
+        Use this resource after creating an evaluator.
+
+        Key rules:
+        - `target` must be `observation` or `experiment`
+        - every evaluator prompt variable must be mapped exactly once
+        - `expected_output` mappings are only valid for `target=experiment`
+        - if `enabled=true`, Langfuse validates that the referenced evaluator can currently run
+
+        Current scope:
+        - continuous evaluations are live-ingestion rules only
+        - they do not trigger historical backfills
       method: POST
       path: /continuous-evaluations
       request: CreateContinuousEvaluationRequest
       response: ContinuousEvaluation
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.NotFoundError
+        - errors.MethodNotAllowedError
+        - errors.UnprocessableContentError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
+      examples:
+        - name: CreateObservationContinuousEvaluation
+          docs: Deploy an evaluator to score live generations only.
+          request:
+            name: answer-correctness-live
+            evaluatorId: eval_123
+            target: observation
+            enabled: true
+            sampling: 1
+            filter:
+              - type: stringOptions
+                column: type
+                operator: any of
+                value:
+                  - GENERATION
+            mapping:
+              - variable: input
+                source: input
+              - variable: output
+                source: output
+          response:
+            body:
+              id: ceval_123
+              name: answer-correctness-live
+              evaluatorId: eval_123
+              target: observation
+              enabled: true
+              status: active
+              pausedReason: null
+              pausedMessage: null
+              sampling: 1
+              filter:
+                - type: stringOptions
+                  column: type
+                  operator: any of
+                  value:
+                    - GENERATION
+              mapping:
+                - variable: input
+                  source: input
+                - variable: output
+                  source: output
+              createdAt: "2026-03-30T09:20:00.000Z"
+              updatedAt: "2026-03-30T09:20:00.000Z"
+        - name: CreateExperimentContinuousEvaluation
+          docs: Deploy an evaluator to compare experiment outputs against expected outputs.
+          request:
+            name: experiment-expected-output-match
+            evaluatorId: eval_456
+            target: experiment
+            enabled: true
+            sampling: 0.5
+            filter:
+              - type: stringOptions
+                column: datasetId
+                operator: any of
+                value:
+                  - dataset-prod
+            mapping:
+              - variable: output
+                source: output
+              - variable: expected_output
+                source: expected_output
+          response:
+            body:
+              id: ceval_456
+              name: experiment-expected-output-match
+              evaluatorId: eval_456
+              target: experiment
+              enabled: true
+              status: active
+              pausedReason: null
+              pausedMessage: null
+              sampling: 0.5
+              filter:
+                - type: stringOptions
+                  column: datasetId
+                  operator: any of
+                  value:
+                    - dataset-prod
+              mapping:
+                - variable: output
+                  source: output
+                - variable: expected_output
+                  source: expected_output
+              createdAt: "2026-03-30T09:30:00.000Z"
+              updatedAt: "2026-03-30T09:30:00.000Z"
 
     list:
-      docs: List continuous evaluations on the unstable public API.
+      docs: |
+        List continuous evaluations in the authenticated project.
+
+        Each item describes the effective deployment state of one evaluator against live ingestion.
       method: GET
       path: /continuous-evaluations
       request:
@@ -26,24 +138,55 @@ service:
         query-parameters:
           page:
             type: optional<integer>
-            docs: Page number, starts at 1.
+            docs: 1-based page number. Defaults to `1`.
           limit:
             type: optional<integer>
-            docs: Limit of items per page.
+            docs: Maximum number of items per page. Defaults to `50`.
       response: ContinuousEvaluations
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.MethodNotAllowedError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
     get:
-      docs: Get a continuous evaluation on the unstable public API.
+      docs: |
+        Get one continuous evaluation by its identifier.
+
+        Use this endpoint to inspect the current target, mapping, filters, and effective runtime status.
       method: GET
       path: /continuous-evaluations/{continuousEvaluationId}
       path-parameters:
         continuousEvaluationId:
           type: string
-          docs: Continuous evaluation identifier.
+          docs: Continuous evaluation identifier returned by the continuous evaluation endpoints.
       response: ContinuousEvaluation
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.NotFoundError
+        - errors.MethodNotAllowedError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
     update:
-      docs: Update a continuous evaluation on the unstable public API.
+      docs: |
+        Update a continuous evaluation.
+
+        Typical uses:
+        - enable or disable live execution
+        - switch to another evaluator
+        - adjust sampling
+        - change filters
+        - update variable mappings
+
+        Important behavior:
+        - provide only the fields you want to change
+        - changing `target`, `filter`, or `mapping` must still produce a valid target-specific configuration
+        - if the resulting config is enabled, Langfuse re-validates that the referenced evaluator can run
       method: PATCH
       path: /continuous-evaluations/{continuousEvaluationId}
       path-parameters:
@@ -52,9 +195,21 @@ service:
           docs: Continuous evaluation identifier.
       request: UpdateContinuousEvaluationRequest
       response: ContinuousEvaluation
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.NotFoundError
+        - errors.MethodNotAllowedError
+        - errors.UnprocessableContentError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
     delete:
-      docs: Delete a continuous evaluation on the unstable public API.
+      docs: |
+        Delete a continuous evaluation.
+
+        This removes the live-ingestion rule only. It does not delete the referenced evaluator.
       method: DELETE
       path: /continuous-evaluations/{continuousEvaluationId}
       path-parameters:
@@ -62,49 +217,171 @@ service:
           type: string
           docs: Continuous evaluation identifier.
       response: DeleteContinuousEvaluationResponse
+      errors:
+        - errors.BadRequestError
+        - errors.UnauthorizedError
+        - errors.AccessDeniedError
+        - errors.NotFoundError
+        - errors.MethodNotAllowedError
+        - errors.TooManyRequestsError
+        - errors.InternalServerError
 
 types:
   ContinuousEvaluation:
+    docs: |
+      Live-ingestion deployment of an evaluator.
+
+      A continuous evaluation answers:
+      - which evaluator should be used
+      - which target objects should trigger scoring
+      - how often scoring should run
+      - which target fields should populate each evaluator variable
+      - whether the deployment is active, inactive, or paused
     properties:
-      id: string
-      name: string
-      evaluatorId: string
-      target: commons.ContinuousEvaluationTarget
-      enabled: boolean
-      status: commons.ContinuousEvaluationStatus
-      pausedReason: nullable<string>
-      pausedMessage: nullable<string>
-      sampling: double
-      filter: list<map<string, unknown>>
-      mapping: list<commons.ContinuousEvaluationMapping>
-      createdAt: datetime
-      updatedAt: datetime
+      id:
+        type: string
+        docs: Stable continuous evaluation identifier.
+      name:
+        type: string
+        docs: Human-readable deployment name. This is independent from the evaluator name.
+      evaluatorId:
+        type: string
+        docs: Referenced evaluator identifier.
+      target:
+        type: commons.ContinuousEvaluationTarget
+        docs: Target object type that should trigger scoring.
+      enabled:
+        type: boolean
+        docs: Desired enabled state configured by the client.
+      status:
+        type: commons.ContinuousEvaluationStatus
+        docs: Effective runtime status after Langfuse applies validation and blocking rules.
+      pausedReason:
+        type: nullable<string>
+        docs: Internal machine-readable reason when `status=paused`, otherwise `null`.
+      pausedMessage:
+        type: nullable<string>
+        docs: Human-readable explanation when `status=paused`, otherwise `null`.
+      sampling:
+        type: double
+        docs: |
+          Fraction of matching target objects that should be evaluated.
+
+          Must be greater than `0` and less than or equal to `1`.
+          - `1` means evaluate every matching target.
+          - `0.25` means evaluate approximately 25% of matching targets.
+      filter:
+        type: list<commons.ContinuousEvaluationFilter>
+        docs: List of filter conditions used to decide whether a target should be evaluated.
+      mapping:
+        type: list<commons.ContinuousEvaluationMapping>
+        docs: Variable mappings used to populate the evaluator prompt from the live target object.
+      createdAt:
+        type: datetime
+        docs: Timestamp when the continuous evaluation was created.
+      updatedAt:
+        type: datetime
+        docs: Timestamp when the continuous evaluation was last updated.
+    examples:
+      - value:
+          id: ceval_123
+          name: answer-correctness-live
+          evaluatorId: eval_123
+          target: observation
+          enabled: true
+          status: active
+          pausedReason: null
+          pausedMessage: null
+          sampling: 1
+          filter:
+            - type: stringOptions
+              column: type
+              operator: any of
+              value:
+                - GENERATION
+          mapping:
+            - variable: input
+              source: input
+            - variable: output
+              source: output
+          createdAt: "2026-03-30T09:20:00.000Z"
+          updatedAt: "2026-03-30T09:20:00.000Z"
 
   ContinuousEvaluations:
+    docs: Paginated list of continuous evaluations.
     properties:
-      data: list<ContinuousEvaluation>
-      meta: pagination.MetaResponse
+      data:
+        type: list<ContinuousEvaluation>
+        docs: Continuous evaluations in the current page.
+      meta:
+        type: pagination.MetaResponse
+        docs: Standard pagination metadata.
 
   CreateContinuousEvaluationRequest:
+    docs: |
+      Request body for creating a continuous evaluation.
+
+      Checklist for agents and SDK clients:
+      - reference an existing `evaluatorId`
+      - choose `target=observation` or `target=experiment`
+      - provide a complete variable mapping for every evaluator variable
+      - optionally narrow execution with `filter`
+      - set `enabled=true` only when you want live execution immediately
     properties:
-      name: string
-      evaluatorId: string
-      target: commons.ContinuousEvaluationTarget
-      enabled: boolean
-      sampling: optional<double>
-      filter: optional<list<map<string, unknown>>>
-      mapping: list<commons.ContinuousEvaluationMapping>
+      name:
+        type: string
+        docs: Human-readable deployment name.
+      evaluatorId:
+        type: string
+        docs: Identifier of the evaluator to deploy.
+      target:
+        type: commons.ContinuousEvaluationTarget
+        docs: Target object type to evaluate.
+      enabled:
+        type: boolean
+        docs: Whether the deployment should be active immediately after creation.
+      sampling:
+        type: optional<double>
+        docs: Optional sampling fraction. Defaults to `1`.
+      filter:
+        type: optional<list<commons.ContinuousEvaluationFilter>>
+        docs: Optional filter list. Omit or pass an empty list to evaluate all matching targets for the selected `target`.
+      mapping:
+        type: list<commons.ContinuousEvaluationMapping>
+        docs: Required variable mappings. Every evaluator variable must appear exactly once.
 
   UpdateContinuousEvaluationRequest:
+    docs: |
+      Partial update body for a continuous evaluation.
+
+      Provide only the fields you want to change.
+      An empty body is rejected.
     properties:
-      name: optional<string>
-      evaluatorId: optional<string>
-      target: optional<commons.ContinuousEvaluationTarget>
-      enabled: optional<boolean>
-      sampling: optional<double>
-      filter: optional<list<map<string, unknown>>>
-      mapping: optional<list<commons.ContinuousEvaluationMapping>>
+      name:
+        type: optional<string>
+        docs: Updated deployment name.
+      evaluatorId:
+        type: optional<string>
+        docs: Updated evaluator identifier.
+      target:
+        type: optional<commons.ContinuousEvaluationTarget>
+        docs: Updated target object type.
+      enabled:
+        type: optional<boolean>
+        docs: Updated desired enabled state.
+      sampling:
+        type: optional<double>
+        docs: Updated sampling fraction.
+      filter:
+        type: optional<list<commons.ContinuousEvaluationFilter>>
+        docs: Updated filter list.
+      mapping:
+        type: optional<list<commons.ContinuousEvaluationMapping>>
+        docs: Updated variable mappings.
 
   DeleteContinuousEvaluationResponse:
+    docs: Confirmation response returned after successful deletion.
     properties:
-      message: string
+      message:
+        type: string
+        docs: Always `Continuous evaluation successfully deleted`.
