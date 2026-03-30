@@ -9,7 +9,7 @@ import type {
   PublicContinuousEvaluationTargetType,
 } from "@/src/features/public-api/types/unstable-public-evals-contract";
 import { getEvaluatorDefinitionPreflightError } from "@/src/features/evals/server/evaluator-preflight";
-import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-errors";
+import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
 import type { PrismaClientLike } from "./types";
 import { getPrismaClient } from "./queries";
 

@@ -19,10 +19,11 @@ import {
   createUnstablePublicApiAuthError,
   createUnstablePublicApiRequestValidationError,
   sendUnstablePublicApiErrorResponse,
-  type PublicApiErrorFormat,
-} from "@/src/features/public-api/server/unstable-public-api-errors";
+  unstablePublicEvalsErrorContract,
+  type PublicApiErrorContract,
+} from "@/src/features/public-api/server/unstable-public-api-error-contract";
 
-type RouteConfig<
+export type AuthedProjectAPIRouteConfig<
   TQuery extends ZodType<any>,
   TBody extends ZodType<any>,
   TResponse extends ZodType<any>,
@@ -47,7 +48,7 @@ type RouteConfig<
    * @default false
    */
   isAdminApiKeyAuthAllowed?: boolean;
-  errorFormat?: PublicApiErrorFormat;
+  errorContract?: PublicApiErrorContract;
   fn: (params: {
     query: z.infer<TQuery>;
     body: z.infer<TBody>;
@@ -85,14 +86,14 @@ async function verifyBasicAuth(authHeader: string | undefined): Promise<
 
   if (regularAuth.scope.accessLevel !== "project") {
     throw {
-      status: 401,
+      status: 403,
       message: "Access denied - need to use basic auth with secret key",
     };
   }
 
   if (!regularAuth.scope.projectId) {
     throw {
-      status: 401,
+      status: 403,
       message:
         "Project ID not found for API token. Are you using an organization key?",
     };
@@ -244,7 +245,7 @@ export const createAuthedProjectAPIRoute = <
   TBody extends ZodType<any>,
   TResponse extends ZodType<any>,
 >(
-  routeConfig: RouteConfig<TQuery, TBody, TResponse>,
+  routeConfig: AuthedProjectAPIRouteConfig<TQuery, TBody, TResponse>,
 ): ((req: NextApiRequest, res: NextApiResponse) => Promise<void>) => {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     let auth: AuthHeaderValidVerificationResult & {
@@ -261,7 +262,7 @@ export const createAuthedProjectAPIRoute = <
       const statusCode = error.status || 401;
       const message = error.message || "Authentication failed";
 
-      if (routeConfig.errorFormat === "unstable-public-evals") {
+      if (routeConfig.errorContract === unstablePublicEvalsErrorContract) {
         return sendUnstablePublicApiErrorResponse(
           res,
           createUnstablePublicApiAuthError({ statusCode, message }),
@@ -282,7 +283,7 @@ export const createAuthedProjectAPIRoute = <
     if (rateLimitResponse?.isRateLimited()) {
       return rateLimitResponse.sendRestResponseIfLimited(
         res,
-        routeConfig.errorFormat,
+        routeConfig.errorContract,
       );
     }
 
@@ -301,7 +302,7 @@ export const createAuthedProjectAPIRoute = <
         : ({} as z.infer<TQuery>);
     } catch (error) {
       if (
-        routeConfig.errorFormat === "unstable-public-evals" &&
+        routeConfig.errorContract === unstablePublicEvalsErrorContract &&
         isZodError(error)
       ) {
         return sendUnstablePublicApiErrorResponse(
@@ -323,7 +324,7 @@ export const createAuthedProjectAPIRoute = <
         : ({} as z.infer<TBody>);
     } catch (error) {
       if (
-        routeConfig.errorFormat === "unstable-public-evals" &&
+        routeConfig.errorContract === unstablePublicEvalsErrorContract &&
         isZodError(error)
       ) {
         return sendUnstablePublicApiErrorResponse(

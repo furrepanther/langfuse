@@ -10,7 +10,7 @@ import {
   toApiEvaluator,
   toJobConfigurationInput,
 } from "@/src/features/evals/server/unstable-public-api/adapters";
-import { UnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-errors";
+import { UnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
 import type {
   StoredPublicContinuousEvaluationConfig,
   StoredPublicEvaluatorTemplate,
@@ -24,6 +24,36 @@ const numericOutputDefinition = createNumericEvalOutputDefinition({
   reasoningDescription: "Why the score was assigned",
   scoreDescription: "A score between 0 and 1",
 });
+
+const expectUnstablePublicApiError = (
+  fn: () => unknown,
+  params: {
+    code: UnstablePublicApiError["code"];
+    message?: string;
+    details?: Record<string, unknown>;
+  },
+) => {
+  try {
+    fn();
+    throw new Error("Expected function to throw UnstablePublicApiError");
+  } catch (error) {
+    expect(error).toBeInstanceOf(UnstablePublicApiError);
+
+    const unstableError = error as UnstablePublicApiError;
+
+    expect(unstableError.code).toBe(params.code);
+
+    if (params.message) {
+      expect(unstableError.message).toContain(params.message);
+    }
+
+    if (params.details) {
+      expect(unstableError.details).toMatchObject(params.details);
+    }
+
+    return unstableError;
+  }
+};
 
 describe("unstable public eval contracts", () => {
   it("rejects observation continuous evaluations that use expected_output mappings", () => {
@@ -41,6 +71,13 @@ describe("unstable public eval contracts", () => {
     });
 
     expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ["mapping", 1, "source"],
+        }),
+      ]),
+    );
   });
 
   it("rejects experiment filter updates unless target is provided", () => {
@@ -56,6 +93,7 @@ describe("unstable public eval contracts", () => {
     });
 
     expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.length).toBeGreaterThan(0);
   });
 });
 
@@ -112,83 +150,122 @@ describe("unstable public eval adapters", () => {
   });
 
   it("rejects invalid static filter option values", () => {
-    expect(() =>
-      toJobConfigurationInput({
-        input: {
-          name: "answer_quality",
-          target: "observation",
-          enabled: true,
-          sampling: 1,
-          filter: [
-            {
-              type: "stringOptions",
-              column: "type",
-              operator: "any of",
-              value: ["NOT_A_REAL_TYPE"],
-            },
-          ],
-          mapping: [{ variable: "input", source: "input" }],
+    expectUnstablePublicApiError(
+      () =>
+        toJobConfigurationInput({
+          input: {
+            name: "answer_quality",
+            target: "observation",
+            enabled: true,
+            sampling: 1,
+            filter: [
+              {
+                type: "stringOptions",
+                column: "type",
+                operator: "any of",
+                value: ["NOT_A_REAL_TYPE"],
+              },
+            ],
+            mapping: [{ variable: "input", source: "input" }],
+          },
+          evaluatorVariables: ["input"],
+        }),
+      {
+        code: "invalid_filter_value",
+        message:
+          'Filter column "type" contains unsupported value(s): NOT_A_REAL_TYPE',
+        details: {
+          field: "filter[0].value",
+          column: "type",
+          invalidValues: ["NOT_A_REAL_TYPE"],
         },
-        evaluatorVariables: ["input"],
-      }),
-    ).toThrow(UnstablePublicApiError);
+      },
+    );
   });
 
   it("rejects malformed jsonPath selectors", () => {
-    expect(() =>
-      toJobConfigurationInput({
-        input: {
-          name: "metadata_projection",
-          target: "observation",
-          enabled: true,
-          sampling: 1,
-          filter: [],
-          mapping: [
-            {
-              variable: "input",
-              source: "metadata",
-              jsonPath: "$[",
-            },
-          ],
+    expectUnstablePublicApiError(
+      () =>
+        toJobConfigurationInput({
+          input: {
+            name: "metadata_projection",
+            target: "observation",
+            enabled: true,
+            sampling: 1,
+            filter: [],
+            mapping: [
+              {
+                variable: "input",
+                source: "metadata",
+                jsonPath: "$[",
+              },
+            ],
+          },
+          evaluatorVariables: ["input"],
+        }),
+      {
+        code: "invalid_json_path",
+        message: 'invalid jsonPath "$["',
+        details: {
+          field: "mapping[0].jsonPath",
+          variable: "input",
+          value: "$[",
         },
-        evaluatorVariables: ["input"],
-      }),
-    ).toThrow('invalid jsonPath "$["');
+      },
+    );
   });
 
   it("rejects missing evaluator variable mappings", () => {
-    expect(() =>
-      toJobConfigurationInput({
-        input: {
-          name: "answer_quality",
-          target: "observation",
-          enabled: true,
-          sampling: 1,
-          filter: [],
-          mapping: [{ variable: "input", source: "input" }],
+    expectUnstablePublicApiError(
+      () =>
+        toJobConfigurationInput({
+          input: {
+            name: "answer_quality",
+            target: "observation",
+            enabled: true,
+            sampling: 1,
+            filter: [],
+            mapping: [{ variable: "input", source: "input" }],
+          },
+          evaluatorVariables: ["input", "output"],
+        }),
+      {
+        code: "missing_variable_mapping",
+        message: "Missing mappings for evaluator variables: output",
+        details: {
+          field: "mapping",
+          variables: ["output"],
         },
-        evaluatorVariables: ["input", "output"],
-      }),
-    ).toThrow("Missing mappings for evaluator variables: output");
+      },
+    );
   });
 
   it("rejects duplicate evaluator variable mappings", () => {
-    expect(() =>
-      toJobConfigurationInput({
-        input: {
-          name: "answer_quality",
-          target: "observation",
-          enabled: true,
-          sampling: 1,
-          filter: [],
-          mapping: [
-            { variable: "input", source: "input" },
-            { variable: "input", source: "metadata" },
-          ],
+    expectUnstablePublicApiError(
+      () =>
+        toJobConfigurationInput({
+          input: {
+            name: "answer_quality",
+            target: "observation",
+            enabled: true,
+            sampling: 1,
+            filter: [],
+            mapping: [
+              { variable: "input", source: "input" },
+              { variable: "input", source: "metadata" },
+            ],
+          },
+          evaluatorVariables: ["input"],
+        }),
+      {
+        code: "duplicate_variable_mapping",
+        message: 'Mapping variable "input" can only be mapped once',
+        details: {
+          field: "mapping",
+          variable: "input",
         },
-        evaluatorVariables: ["input"],
-      }),
-    ).toThrow('Mapping variable "input" can only be mapped once');
+      },
+    );
   });
 
   it("translates stored continuous evaluations back into public API records", () => {

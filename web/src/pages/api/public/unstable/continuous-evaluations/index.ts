@@ -3,8 +3,10 @@ import {
   createPublicContinuousEvaluation,
   listPublicContinuousEvaluations,
 } from "@/src/features/evals/server/unstable-public-api";
-import { createAuthedProjectAPIRoute } from "@/src/features/public-api/server/createAuthedProjectAPIRoute";
-import { withMiddlewares } from "@/src/features/public-api/server/withMiddlewares";
+import {
+  createUnstablePublicEvalsRoute,
+  withUnstablePublicEvalsMiddlewares,
+} from "@/src/features/public-api/server/unstable-public-evals-route";
 import {
   GetUnstableContinuousEvaluationsQuery,
   GetUnstableContinuousEvaluationsResponse,
@@ -12,44 +14,39 @@ import {
   PostUnstableContinuousEvaluationResponse,
 } from "@/src/features/public-api/types/unstable-continuous-evaluations";
 
-export default withMiddlewares(
-  {
-    GET: createAuthedProjectAPIRoute({
-      name: "List Unstable Continuous Evaluations",
-      querySchema: GetUnstableContinuousEvaluationsQuery,
-      responseSchema: GetUnstableContinuousEvaluationsResponse,
-      errorFormat: "unstable-public-evals",
-      fn: async ({ query, auth }) =>
-        listPublicContinuousEvaluations({
-          projectId: auth.scope.projectId,
-          page: query.page,
-          limit: query.limit,
-        }),
-    }),
-    POST: createAuthedProjectAPIRoute({
-      name: "Create Unstable Continuous Evaluation",
-      bodySchema: PostUnstableContinuousEvaluationBody,
-      responseSchema: PostUnstableContinuousEvaluationResponse,
-      errorFormat: "unstable-public-evals",
-      fn: async ({ body, auth }) => {
-        const continuousEvaluation = await createPublicContinuousEvaluation({
-          projectId: auth.scope.projectId,
-          input: body,
-        });
+export default withUnstablePublicEvalsMiddlewares({
+  GET: createUnstablePublicEvalsRoute({
+    name: "List Unstable Continuous Evaluations",
+    querySchema: GetUnstableContinuousEvaluationsQuery,
+    responseSchema: GetUnstableContinuousEvaluationsResponse,
+    fn: async ({ query, auth }) =>
+      listPublicContinuousEvaluations({
+        projectId: auth.scope.projectId,
+        page: query.page,
+        limit: query.limit,
+      }),
+  }),
+  POST: createUnstablePublicEvalsRoute({
+    name: "Create Unstable Continuous Evaluation",
+    bodySchema: PostUnstableContinuousEvaluationBody,
+    responseSchema: PostUnstableContinuousEvaluationResponse,
+    fn: async ({ body, auth }) => {
+      const continuousEvaluation = await createPublicContinuousEvaluation({
+        projectId: auth.scope.projectId,
+        input: body,
+      });
 
-        await auditLog({
-          action: "create",
-          resourceType: "job",
-          resourceId: continuousEvaluation.id,
-          projectId: auth.scope.projectId,
-          orgId: auth.scope.orgId,
-          apiKeyId: auth.scope.apiKeyId,
-          after: continuousEvaluation,
-        });
+      await auditLog({
+        action: "create",
+        resourceType: "job",
+        resourceId: continuousEvaluation.id,
+        projectId: auth.scope.projectId,
+        orgId: auth.scope.orgId,
+        apiKeyId: auth.scope.apiKeyId,
+        after: continuousEvaluation,
+      });
 
-        return continuousEvaluation;
-      },
-    }),
-  },
-  { errorFormat: "unstable-public-evals" },
-);
+      return continuousEvaluation;
+    },
+  }),
+});

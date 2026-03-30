@@ -18,8 +18,9 @@ import * as opentelemetry from "@opentelemetry/api";
 import {
   sendUnstablePublicApiErrorResponse,
   toUnstablePublicApiError,
-  type PublicApiErrorFormat,
-} from "@/src/features/public-api/server/unstable-public-api-errors";
+  unstablePublicEvalsErrorContract,
+  type PublicApiErrorContract,
+} from "@/src/features/public-api/server/unstable-public-api-error-contract";
 
 // Exported to silence @typescript-eslint/no-unused-vars v8 warning
 // (used for type extraction via typeof, which is a legitimate pattern)
@@ -42,7 +43,7 @@ const CH_ERROR_ADVICE_FULL = [
 ].join("\n");
 
 type MiddlewareOptions = {
-  errorFormat?: PublicApiErrorFormat;
+  errorContract?: PublicApiErrorContract;
 };
 
 export function withMiddlewares(
@@ -83,7 +84,7 @@ export function withMiddlewares(
           logger.error(error);
         }
 
-        if (options?.errorFormat === "unstable-public-evals") {
+        if (options?.errorContract === unstablePublicEvalsErrorContract) {
           if (
             error instanceof BaseError &&
             error.httpCode >= 500 &&

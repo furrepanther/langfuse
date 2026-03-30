@@ -1,5 +1,6 @@
 /** @jest-environment node */
 
+import { randomUUID } from "node:crypto";
 import {
   makeAPICall,
   makeZodVerifiedAPICall,
@@ -23,7 +24,12 @@ import {
   EvalTargetObject,
 } from "@langfuse/shared";
 import { prisma } from "@langfuse/shared/src/db";
-import { createOrgProjectAndApiKey } from "@langfuse/shared/src/server";
+import {
+  createBasicAuthHeader,
+  createOrgProjectAndApiKey,
+  getDisplaySecretKey,
+  hashSecretKey,
+} from "@langfuse/shared/src/server";
 import { UnstablePublicApiErrorResponse } from "@/src/features/public-api/types/unstable-public-evals-contract";
 import type { z } from "zod";
 
@@ -412,6 +418,158 @@ describe("/api/public/unstable evals API", () => {
     });
   });
 
+  it("supports full continuous evaluation lifecycle for experiment targets", async () => {
+    const evaluator = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Experiment output judge",
+        prompt: "Compare {{output}} to {{expected_output}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const created = await makeZodVerifiedAPICall(
+      PostUnstableContinuousEvaluationResponse,
+      "POST",
+      "/api/public/unstable/continuous-evaluations",
+      {
+        name: "experiment_output_judge",
+        evaluatorId: evaluator.body.id,
+        target: "experiment",
+        enabled: true,
+        sampling: 1,
+        filter: [
+          {
+            type: "stringOptions",
+            column: "datasetId",
+            operator: "any of",
+            value: ["dataset-1"],
+          },
+        ],
+        mapping: [
+          { variable: "output", source: "output" },
+          { variable: "expected_output", source: "expected_output" },
+        ],
+      },
+      auth,
+    );
+
+    expect(created.body).toMatchObject({
+      target: "experiment",
+      status: "active",
+      mapping: [
+        { variable: "output", source: "output" },
+        { variable: "expected_output", source: "expected_output" },
+      ],
+    });
+
+    const fetched = await makeZodVerifiedAPICall(
+      GetUnstableContinuousEvaluationResponse,
+      "GET",
+      `/api/public/unstable/continuous-evaluations/${created.body.id}`,
+      undefined,
+      auth,
+    );
+
+    expect(fetched.body).toMatchObject({
+      id: created.body.id,
+      target: "experiment",
+      filter: [
+        {
+          type: "stringOptions",
+          column: "datasetId",
+          operator: "any of",
+          value: ["dataset-1"],
+        },
+      ],
+    });
+
+    const updated = await makeZodVerifiedAPICall(
+      PatchUnstableContinuousEvaluationResponse,
+      "PATCH",
+      `/api/public/unstable/continuous-evaluations/${created.body.id}`,
+      {
+        target: "experiment",
+        enabled: false,
+        sampling: 0.25,
+        filter: [
+          {
+            type: "stringOptions",
+            column: "datasetId",
+            operator: "any of",
+            value: ["dataset-2"],
+          },
+        ],
+        mapping: [
+          { variable: "output", source: "output" },
+          { variable: "expected_output", source: "expected_output" },
+        ],
+      },
+      auth,
+    );
+
+    expect(updated.body).toMatchObject({
+      id: created.body.id,
+      target: "experiment",
+      enabled: false,
+      status: "inactive",
+      sampling: 0.25,
+      filter: [
+        {
+          type: "stringOptions",
+          column: "datasetId",
+          operator: "any of",
+          value: ["dataset-2"],
+        },
+      ],
+    });
+
+    const listed = await makeZodVerifiedAPICall(
+      GetUnstableContinuousEvaluationsResponse,
+      "GET",
+      "/api/public/unstable/continuous-evaluations?page=1&limit=50",
+      undefined,
+      auth,
+    );
+
+    expect(listed.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: created.body.id,
+          target: "experiment",
+          enabled: false,
+        }),
+      ]),
+    );
+
+    const deleted = await makeZodVerifiedAPICall(
+      DeleteUnstableContinuousEvaluationResponse,
+      "DELETE",
+      `/api/public/unstable/continuous-evaluations/${created.body.id}`,
+      undefined,
+      auth,
+    );
+
+    expect(deleted.body).toEqual({
+      message: "Continuous evaluation successfully deleted",
+    });
+
+    const missing = await makeAPICall(
+      "GET",
+      `/api/public/unstable/continuous-evaluations/${created.body.id}`,
+      undefined,
+      auth,
+    );
+
+    expectUnstableError(missing, {
+      status: 404,
+      code: "resource_not_found",
+    });
+  });
+
   it("does not expose internal templates that do not have a public evaluator id", async () => {
     await prisma.evalTemplate.create({
       data: {
@@ -452,6 +610,36 @@ describe("/api/public/unstable evals API", () => {
     expect(error.message).toContain(
       "Confirm that you've configured the correct host.",
     );
+  });
+
+  it("returns access_denied for authenticated organization keys on unstable project endpoints", async () => {
+    const publicKey = `pk-lf-org-${randomUUID()}`;
+    const secretKey = randomUUID();
+
+    await prisma.apiKey.create({
+      data: {
+        id: randomUUID(),
+        orgId: __orgIds[__orgIds.length - 1],
+        publicKey,
+        hashedSecretKey: await hashSecretKey(secretKey),
+        displaySecretKey: getDisplaySecretKey(secretKey),
+        scope: "ORGANIZATION",
+      },
+    });
+
+    const response = await makeAPICall(
+      "GET",
+      "/api/public/unstable/evaluators?page=1&limit=10",
+      undefined,
+      createBasicAuthHeader(publicKey, secretKey),
+    );
+
+    const error = expectUnstableError(response, {
+      status: 403,
+      code: "access_denied",
+    });
+
+    expect(error.message).toContain("need to use basic auth with secret key");
   });
 
   it("returns invalid_body for malformed evaluator payloads", async () => {

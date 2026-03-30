@@ -3,20 +3,24 @@
 const mockEvalTemplateCreate = jest.fn();
 const mockJobConfigurationUpdateMany = jest.fn();
 
-jest.mock("../../features/evals/server/unstable-public-api/validation", () => {
-  const actual = jest.requireActual(
-    "../../features/evals/server/unstable-public-api/validation",
-  );
+jest.mock(
+  "../../../features/evals/server/unstable-public-api/validation",
+  () => {
+    const actual = jest.requireActual(
+      "../../../features/evals/server/unstable-public-api/validation",
+    );
 
-  return {
-    ...actual,
-    assertEvaluatorDefinitionCanRunForPublicApi: jest.fn(),
-    assertEvaluatorNameIsAvailable: jest.fn(),
-  };
-});
+    return {
+      ...actual,
+      assertEvaluatorDefinitionCanRunForPublicApi: jest.fn(),
+      assertEvaluatorNameIsAvailable: jest.fn(),
+    };
+  },
+);
 
-jest.mock("../../features/evals/server/unstable-public-api/queries", () => ({
+jest.mock("../../../features/evals/server/unstable-public-api/queries", () => ({
   findEvaluatorTemplateVersionsOrThrow: jest.fn(),
+  countContinuousEvaluationsForEvaluator: jest.fn(),
   loadEvaluatorForContinuousEvaluation: jest.fn(),
   findPublicContinuousEvaluationOrThrow: jest.fn(),
 }));
@@ -53,14 +57,17 @@ import {
   JobConfigState,
 } from "@langfuse/shared";
 import { prisma } from "@langfuse/shared/src/db";
-import { createUnstablePublicApiError } from "../../features/public-api/server/unstable-public-api-errors";
+import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
 import {
   createPublicContinuousEvaluation,
   updatePublicContinuousEvaluation,
-} from "../../features/evals/server/unstable-public-api/continuous-evaluation-service";
-import { createPublicEvaluator } from "../../features/evals/server/unstable-public-api/evaluator-service";
-import * as queryModule from "../../features/evals/server/unstable-public-api/queries";
-import * as validationModule from "../../features/evals/server/unstable-public-api/validation";
+} from "@/src/features/evals/server/unstable-public-api/continuous-evaluation-service";
+import {
+  createPublicEvaluator,
+  updatePublicEvaluator,
+} from "@/src/features/evals/server/unstable-public-api/evaluator-service";
+import * as queryModule from "@/src/features/evals/server/unstable-public-api/queries";
+import * as validationModule from "@/src/features/evals/server/unstable-public-api/validation";
 
 const numericOutputDefinition = createNumericEvalOutputDefinition({
   reasoningDescription: "Why the score was assigned",
@@ -99,6 +106,9 @@ const _mockAssertEvaluatorNameIsAvailable = jest.mocked(
 );
 const _mockFindEvaluatorTemplateVersionsOrThrow = jest.mocked(
   queryModule.findEvaluatorTemplateVersionsOrThrow,
+);
+const mockCountContinuousEvaluationsForEvaluator = jest.mocked(
+  queryModule.countContinuousEvaluationsForEvaluator,
 );
 const mockLoadEvaluatorForContinuousEvaluation = jest.mocked(
   queryModule.loadEvaluatorForContinuousEvaluation,
@@ -145,6 +155,8 @@ const createContinuousEvaluationRecord = (
 describe("unstable public eval services", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEvalTemplateCreate.mockReset();
+    mockJobConfigurationUpdateMany.mockReset();
 
     mockedPrisma.$transaction.mockImplementation(async (callback) =>
       callback({
@@ -338,5 +350,121 @@ describe("unstable public eval services", () => {
       status: "active",
       pausedReason: null,
     });
+  });
+
+  it("repoints all continuous evaluations when an evaluator is updated", async () => {
+    const existingTemplates = [
+      {
+        ...evaluatorTemplate,
+        id: "tmpl_1",
+        version: 1,
+        createdAt: new Date("2026-03-30T08:00:00.000Z"),
+        updatedAt: new Date("2026-03-30T08:00:00.000Z"),
+      },
+      {
+        ...evaluatorTemplate,
+        id: "tmpl_2",
+        version: 2,
+        prompt: "Judge {{input}} in detail",
+        createdAt: new Date("2026-03-30T08:00:00.000Z"),
+        updatedAt: new Date("2026-03-30T09:00:00.000Z"),
+      },
+    ];
+    const createdTemplate = {
+      ...evaluatorTemplate,
+      id: "tmpl_3",
+      version: 3,
+      name: "Answer correctness v3",
+      description: "Latest version",
+      prompt: "Judge {{input}} and explain {{output}}",
+      vars: ["input", "output"],
+      createdAt: new Date("2026-03-30T10:00:00.000Z"),
+      updatedAt: new Date("2026-03-30T10:00:00.000Z"),
+    };
+
+    _mockFindEvaluatorTemplateVersionsOrThrow.mockResolvedValueOnce(
+      existingTemplates as any,
+    );
+    mockCountContinuousEvaluationsForEvaluator.mockResolvedValueOnce(2);
+    mockEvalTemplateCreate.mockResolvedValueOnce(createdTemplate);
+
+    const result = await updatePublicEvaluator({
+      projectId: "project_123",
+      evaluatorId: "eval_123",
+      input: {
+        name: "Answer correctness v3",
+        description: "Latest version",
+        prompt: "Judge {{input}} and explain {{output}}",
+      },
+    });
+
+    expect(
+      mockAssertEvaluatorDefinitionCanRunForPublicApi,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: "project_123",
+        template: expect.objectContaining({
+          name: "Answer correctness v3",
+        }),
+      }),
+    );
+    expect(mockEvalTemplateCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          evaluatorId: "eval_123",
+          version: 3,
+          prompt: "Judge {{input}} and explain {{output}}",
+          vars: ["input", "output"],
+        }),
+      }),
+    );
+    expect(mockJobConfigurationUpdateMany).toHaveBeenCalledWith({
+      where: {
+        projectId: "project_123",
+        evalTemplateId: {
+          in: ["tmpl_1", "tmpl_2"],
+        },
+      },
+      data: {
+        evalTemplateId: "tmpl_3",
+      },
+    });
+    expect(result).toMatchObject({
+      id: "eval_123",
+      name: "Answer correctness v3",
+      prompt: "Judge {{input}} and explain {{output}}",
+      variables: ["input", "output"],
+      continuousEvaluationCount: 2,
+    });
+  });
+
+  it("rejects enabled updates when evaluator preflight fails and does not persist changes", async () => {
+    mockFindPublicContinuousEvaluationOrThrow.mockResolvedValueOnce(
+      createContinuousEvaluationRecord({
+        status: JobConfigState.INACTIVE,
+      }),
+    );
+    mockLoadEvaluatorForContinuousEvaluation.mockResolvedValueOnce({
+      template: evaluatorTemplate,
+    });
+    mockAssertEvaluatorDefinitionCanRunForPublicApi.mockRejectedValueOnce(
+      createUnstablePublicApiError({
+        httpCode: 422,
+        code: "evaluator_preflight_failed",
+        message: "Evaluator cannot run right now",
+      }),
+    );
+
+    await expect(
+      updatePublicContinuousEvaluation({
+        projectId: "project_123",
+        continuousEvaluationId: "ceval_123",
+        input: {
+          enabled: true,
+        },
+      }),
+    ).rejects.toThrow("Evaluator cannot run right now");
+
+    expect(mockedPrisma.jobConfiguration.update).not.toHaveBeenCalled();
   });
 });

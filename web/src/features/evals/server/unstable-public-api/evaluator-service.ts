@@ -21,7 +21,7 @@ import {
   assertEvaluatorDefinitionCanRunForPublicApi,
   assertEvaluatorNameIsAvailable,
 } from "./validation";
-import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-errors";
+import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
 
 export async function listPublicEvaluators(params: {
   projectId: string;

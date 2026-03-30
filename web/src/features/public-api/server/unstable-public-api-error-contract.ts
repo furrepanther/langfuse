@@ -11,27 +11,31 @@ import {
   type RateLimitResult,
 } from "@langfuse/shared";
 import { ClickHouseResourceError } from "@langfuse/shared/src/server";
-import type { UnstablePublicApiErrorCodeType } from "@/src/features/public-api/types/unstable-public-evals-contract";
+import type {
+  UnstablePublicApiErrorCodeType,
+  UnstablePublicApiErrorDetailsType,
+} from "@/src/features/public-api/shared/unstable-public-api-error-schema";
 
-export type PublicApiErrorFormat = "unstable-public-evals";
+export const unstablePublicEvalsErrorContract = "unstable-public-evals";
+export type PublicApiErrorContract = typeof unstablePublicEvalsErrorContract;
 
 type UnstablePublicApiErrorBody = {
   message: string;
   code: UnstablePublicApiErrorCodeType;
-  details?: unknown;
+  details?: UnstablePublicApiErrorDetailsType;
   requestId?: string;
 };
 
 export class UnstablePublicApiError extends BaseError {
   public readonly code: UnstablePublicApiErrorCodeType;
-  public readonly details?: unknown;
+  public readonly details?: UnstablePublicApiErrorDetailsType;
   public readonly requestId?: string;
 
   constructor(params: {
     httpCode: number;
     code: UnstablePublicApiErrorCodeType;
     message: string;
-    details?: unknown;
+    details?: UnstablePublicApiErrorDetailsType;
     requestId?: string;
   }) {
     super("UnstablePublicApiError", params.httpCode, params.message, true);
@@ -61,7 +65,7 @@ export function createUnstablePublicApiError(params: {
   httpCode: number;
   code: UnstablePublicApiErrorCodeType;
   message: string;
-  details?: unknown;
+  details?: UnstablePublicApiErrorDetailsType;
   requestId?: string;
 }) {
   return new UnstablePublicApiError(params);

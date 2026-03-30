@@ -27,6 +27,81 @@ types:
       - method_not_allowed
       - internal_error
 
+  PublicApiValidationIssue:
+    docs: |
+      One validation issue returned for malformed request bodies or query parameters.
+
+      This mirrors the most important parts of a Zod issue: a machine-readable `code`,
+      a human-readable `message`, and a structured `path`.
+    properties:
+      code:
+        type: string
+        docs: Machine-readable validation issue code emitted by the server validator.
+      message:
+        type: string
+        docs: Human-readable explanation of the validation failure.
+      path:
+        type: list<unknown>
+        docs: Path to the invalid field, for example `["mapping", 0, "jsonPath"]`.
+
+  PublicApiErrorDetails:
+    docs: |
+      Optional structured context attached to an unstable-evals error.
+
+      The populated fields depend on the error `code`:
+      - request parsing failures populate `issues`
+      - filter validation failures populate `field`, `column`, `invalidValues`, and `allowedValues`
+      - variable mapping failures populate `field`, `variable`, or `variables`
+      - JSONPath validation failures populate `field`, `variable`, and `value`
+      - evaluator preflight failures populate `evaluatorName`, `provider`, and `model`
+      - rate limiting populates `retryAfterSeconds`, `limit`, `remaining`, and `resetAt`
+    properties:
+      issues:
+        type: optional<list<PublicApiValidationIssue>>
+        docs: Validation issues for malformed request bodies or query parameters.
+      field:
+        type: optional<string>
+        docs: Path-like reference to the failing field, for example `mapping[1].jsonPath`.
+      column:
+        type: optional<string>
+        docs: Filter column that failed validation.
+      invalidValues:
+        type: optional<list<string>>
+        docs: Unsupported values supplied by the caller.
+      allowedValues:
+        type: optional<list<string>>
+        docs: Allowed values for the failing filter column.
+      variable:
+        type: optional<string>
+        docs: Evaluator variable involved in the failure.
+      variables:
+        type: optional<list<string>>
+        docs: Multiple evaluator variables involved in the failure, for example missing mappings.
+      value:
+        type: optional<string>
+        docs: Raw invalid value supplied by the caller.
+      evaluatorName:
+        type: optional<string>
+        docs: Evaluator name used during preflight validation.
+      provider:
+        type: optional<nullable<string>>
+        docs: Provider resolved during evaluator preflight, if any.
+      model:
+        type: optional<nullable<string>>
+        docs: Model resolved during evaluator preflight, if any.
+      retryAfterSeconds:
+        type: optional<integer>
+        docs: Suggested retry delay for rate-limited requests.
+      limit:
+        type: optional<integer>
+        docs: Total number of requests allowed in the current rate-limit window.
+      remaining:
+        type: optional<integer>
+        docs: Remaining requests in the current rate-limit window.
+      resetAt:
+        type: optional<string>
+        docs: ISO-8601 timestamp when the current rate-limit window resets.
+
   PublicApiError:
     docs: |
       Standard error envelope for the unstable evaluators API.
@@ -43,15 +118,8 @@ types:
         type: PublicApiErrorCode
         docs: Stable machine-readable error code.
       details:
-        type: optional<unknown>
-        docs: |
-          Optional structured error context.
-
-          Examples:
-          - Validation issues for malformed request bodies
-          - `field`, `column`, and `invalidValues` for filter validation
-          - `field`, `variable`, and `value` for malformed JSONPath selectors
-          - `variables` for missing prompt variable mappings
+        type: optional<PublicApiErrorDetails>
+        docs: Optional structured error context. Inspect the populated fields based on `code`.
       requestId:
         type: optional<string>
         docs: Optional request identifier for correlating client-side failures with server logs.
@@ -77,6 +145,15 @@ types:
             evaluatorName: answer-correctness
             provider: null
             model: null
+      - name: RateLimited
+        value:
+          message: Rate limit exceeded
+          code: rate_limited
+          details:
+            retryAfterSeconds: 60
+            limit: 1000
+            remaining: 0
+            resetAt: "2026-03-30T10:00:00.000Z"
 
 errors:
   BadRequestError:
@@ -91,11 +168,21 @@ errors:
     status-code: 400
     type: PublicApiError
   UnauthorizedError:
-    docs: Authentication failed.
+    docs: |
+      Authentication failed.
+
+      Typical unstable-eval examples:
+      - the API key or secret key is invalid
+      - the request uses the wrong host or stale credentials
     status-code: 401
     type: PublicApiError
   AccessDeniedError:
-    docs: Authenticated, but the caller is not allowed to access the requested resource.
+    docs: |
+      Authenticated, but the caller is not allowed to access the requested resource.
+
+      Typical unstable-eval examples:
+      - using an organization-scoped key against project-scoped evaluator endpoints
+      - using a valid key that lacks the required access level for this resource
     status-code: 403
     type: PublicApiError
   NotFoundError:

@@ -20,8 +20,9 @@ import { type NextApiResponse } from "next";
 import {
   createUnstablePublicApiRateLimitError,
   sendUnstablePublicApiErrorResponse,
-  type PublicApiErrorFormat,
-} from "@/src/features/public-api/server/unstable-public-api-errors";
+  unstablePublicEvalsErrorContract,
+  type PublicApiErrorContract,
+} from "@/src/features/public-api/server/unstable-public-api-error-contract";
 
 // Business Logic
 // - rate limit strategy is based on org-id, org plan, and resources. Rate limits are applied in buckets of minutes.
@@ -173,7 +174,7 @@ export class RateLimitHelper {
 
   sendRestResponseIfLimited(
     nextResponse: NextApiResponse,
-    errorFormat?: PublicApiErrorFormat,
+    errorContract?: PublicApiErrorContract,
   ) {
     if (!this.res || !this.isRateLimited()) {
       logger.error("Trying to send rate limit response without being limited.");
@@ -181,14 +182,14 @@ export class RateLimitHelper {
         "Trying to send rate limit response without being limited.",
       );
     }
-    return sendRateLimitResponse(nextResponse, this.res, errorFormat);
+    return sendRateLimitResponse(nextResponse, this.res, errorContract);
   }
 }
 
 export const sendRateLimitResponse = (
   res: NextApiResponse,
   rateLimitRes: RateLimitResult,
-  errorFormat?: PublicApiErrorFormat,
+  errorContract?: PublicApiErrorContract,
 ) => {
   const httpHeader = createHttpHeaderFromRateLimit(rateLimitRes);
 
@@ -196,7 +197,7 @@ export const sendRateLimitResponse = (
     res.setHeader(header, value);
   }
 
-  if (errorFormat === "unstable-public-evals") {
+  if (errorContract === unstablePublicEvalsErrorContract) {
     return sendUnstablePublicApiErrorResponse(
       res,
       createUnstablePublicApiRateLimitError(rateLimitRes),
