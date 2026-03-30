@@ -85,5 +85,12 @@ describe("decodeUnicodeEscapesOnly", () => {
     it("should preserve lone low surrogate as literal in greedy mode", () => {
       expect(decodeUnicodeEscapesOnly("\\\\uDE00", true)).toBe("\\uDE00");
     });
+
+    it("should handle lone high surrogate followed by backslashes and non-surrogate in greedy mode", () => {
+      // \\uD83D\\\\u0041: high surrogate preserved, then \\\\u0041 decoded to A by main loop
+      expect(decodeUnicodeEscapesOnly("\\\\uD83D\\\\\\\\u0041", true)).toBe(
+        "\\uD83DA",
+      );
+    });
   });
 });
