@@ -19,6 +19,7 @@ import {
   PatchUnstableContinuousEvaluationBody,
   PostUnstableContinuousEvaluationBody,
 } from "@/src/features/public-api/types/unstable-continuous-evaluations";
+import { PatchUnstableEvaluatorBody } from "@/src/features/public-api/types/unstable-evaluators";
 
 const numericOutputDefinition = createNumericEvalOutputDefinition({
   reasoningDescription: "Why the score was assigned",
@@ -94,6 +95,24 @@ describe("unstable public eval contracts", () => {
 
     expect(parsed.success).toBe(false);
     expect(parsed.error?.issues.length).toBeGreaterThan(0);
+  });
+
+  it("rejects null for non-nullable evaluator update fields", () => {
+    expect(
+      PatchUnstableEvaluatorBody.safeParse({
+        name: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      PatchUnstableEvaluatorBody.safeParse({
+        prompt: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      PatchUnstableEvaluatorBody.safeParse({
+        outputDefinition: null,
+      }).success,
+    ).toBe(false);
   });
 });
 

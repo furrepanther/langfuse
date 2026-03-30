@@ -438,6 +438,64 @@ describe("unstable public eval services", () => {
     });
   });
 
+  it("clears the evaluator model config when patch explicitly sets modelConfig to null", async () => {
+    const existingTemplates = [
+      {
+        ...evaluatorTemplate,
+        id: "tmpl_1",
+        version: 1,
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        modelParams: { temperature: 0 },
+      },
+    ];
+    const createdTemplate = {
+      ...evaluatorTemplate,
+      id: "tmpl_2",
+      version: 2,
+      provider: null,
+      model: null,
+      modelParams: null,
+      updatedAt: new Date("2026-03-30T10:00:00.000Z"),
+    };
+
+    _mockFindEvaluatorTemplateVersionsOrThrow.mockResolvedValueOnce(
+      existingTemplates as any,
+    );
+    mockCountContinuousEvaluationsForEvaluator.mockResolvedValueOnce(0);
+    mockEvalTemplateCreate.mockResolvedValueOnce(createdTemplate);
+
+    const result = await updatePublicEvaluator({
+      projectId: "project_123",
+      evaluatorId: "eval_123",
+      input: {
+        modelConfig: null,
+      },
+    });
+
+    expect(
+      mockAssertEvaluatorDefinitionCanRunForPublicApi,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template: expect.objectContaining({
+          provider: null,
+          model: null,
+          modelParams: undefined,
+        }),
+      }),
+    );
+    expect(mockEvalTemplateCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: null,
+          model: null,
+          modelParams: undefined,
+        }),
+      }),
+    );
+    expect(result.modelConfig).toBeNull();
+  });
+
   it("rejects enabled updates when evaluator preflight fails and does not persist changes", async () => {
     mockFindPublicContinuousEvaluationOrThrow.mockResolvedValueOnce(
       createContinuousEvaluationRecord({

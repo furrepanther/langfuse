@@ -139,9 +139,11 @@ export async function updatePublicEvaluator(params: {
   const latestTemplate = templates[templates.length - 1]!;
   const nextName = params.input.name ?? latestTemplate.name;
   const nextPrompt = params.input.prompt ?? latestTemplate.prompt;
-  const nextModelConfig = toStoredModelConfig(
-    params.input.modelConfig ?? toApiModelConfig(latestTemplate),
-  );
+  const requestedModelConfig =
+    params.input.modelConfig === undefined
+      ? toApiModelConfig(latestTemplate)
+      : params.input.modelConfig;
+  const nextModelConfig = toStoredModelConfig(requestedModelConfig);
   const nextOutputDefinition =
     params.input.outputDefinition ??
     parseStoredOutputDefinition(latestTemplate);

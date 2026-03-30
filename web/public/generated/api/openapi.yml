@@ -12639,16 +12639,28 @@ components:
     unstableUpdateEvaluatorRequest:
       title: unstableUpdateEvaluatorRequest
       type: object
-      description: |-
+      description: >-
         Partial update body for an evaluator.
 
+
         Provide only the fields you want to change.
+
+        Omit any field you want to leave unchanged.
+
+        Only `description` and `modelConfig` accept `null` to clear their
+        current value.
+
+        Do not send `null` for `name`, `prompt`, or `outputDefinition`; omit
+        those fields instead.
+
         An empty body is rejected.
       properties:
         name:
           type: string
           nullable: true
-          description: New unique evaluator name.
+          description: >-
+            New unique evaluator name. Omit to leave unchanged. `null` is not
+            allowed.
         description:
           type: string
           nullable: true
@@ -12657,11 +12669,13 @@ components:
           type: string
           nullable: true
           description: >-
-            Updated prompt template. Variables will be re-derived from the new
-            prompt.
+            Updated prompt template. Omit to leave unchanged. `null` is not
+            allowed. Variables will be re-derived from the new prompt.
         outputDefinition:
           nullable: true
-          description: Updated structured output schema.
+          description: >-
+            Updated structured output schema. Omit to leave unchanged. `null` is
+            not allowed.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true

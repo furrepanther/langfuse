@@ -326,20 +326,23 @@ types:
       Partial update body for an evaluator.
 
       Provide only the fields you want to change.
+      Omit any field you want to leave unchanged.
+      Only `description` and `modelConfig` accept `null` to clear their current value.
+      Do not send `null` for `name`, `prompt`, or `outputDefinition`; omit those fields instead.
       An empty body is rejected.
     properties:
       name:
         type: optional<string>
-        docs: New unique evaluator name.
+        docs: New unique evaluator name. Omit to leave unchanged. `null` is not allowed.
       description:
         type: optional<nullable<string>>
         docs: Updated description, or `null` to clear it.
       prompt:
         type: optional<string>
-        docs: Updated prompt template. Variables will be re-derived from the new prompt.
+        docs: Updated prompt template. Omit to leave unchanged. `null` is not allowed. Variables will be re-derived from the new prompt.
       outputDefinition:
         type: optional<unknown>
-        docs: Updated structured output schema.
+        docs: Updated structured output schema. Omit to leave unchanged. `null` is not allowed.
       modelConfig:
         type: optional<nullable<commons.EvaluatorModelConfig>>
         docs: Updated explicit model configuration, or `null` to fall back to the project default evaluation model.

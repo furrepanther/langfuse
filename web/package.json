@@ -124,6 +124,7 @@
     "https-proxy-agent": "^7.0.6",
     "ioredis": "^5.8.2",
     "ip-address": "^9.0.5",
+    "jsonpath-plus": "10.3.0",
     "json-schema-faker": "^0.5.9",
     "langchain": "^1.2.15",
     "langfuse": "3.38.4",

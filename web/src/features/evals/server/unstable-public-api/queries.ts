@@ -1,5 +1,5 @@
 import { EvalTargetObject, LangfuseNotFoundError } from "@langfuse/shared";
-import { prisma } from "@langfuse/shared/src/db";
+import { Prisma, prisma } from "@langfuse/shared/src/db";
 import type {
   PrismaClientLike,
   StoredPublicContinuousEvaluationConfig,
@@ -131,14 +131,53 @@ export async function listPublicEvaluatorTemplateGroups(params: {
   page: number;
   limit: number;
 }) {
+  const offset = (params.page - 1) * params.limit;
+  const [evaluatorRows, totalItemsRes] = await Promise.all([
+    prisma.$queryRaw<Array<{ evaluatorId: string; latestUpdatedAt: Date }>>(
+      Prisma.sql`
+        SELECT
+          evaluator_id as "evaluatorId",
+          MAX(updated_at) as "latestUpdatedAt"
+        FROM eval_templates
+        WHERE
+          project_id = ${params.projectId}
+          AND evaluator_id IS NOT NULL
+        GROUP BY evaluator_id
+        ORDER BY MAX(updated_at) DESC, evaluator_id ASC
+        LIMIT ${params.limit}
+        OFFSET ${offset}
+      `,
+    ),
+    prisma.$queryRaw<Array<{ count: bigint }>>(
+      Prisma.sql`
+        SELECT
+          COUNT(DISTINCT evaluator_id) as count
+        FROM eval_templates
+        WHERE
+          project_id = ${params.projectId}
+          AND evaluator_id IS NOT NULL
+      `,
+    ),
+  ]);
+  const totalItems =
+    totalItemsRes[0] !== undefined ? Number(totalItemsRes[0].count) : 0;
+  const evaluatorIds = evaluatorRows.map((row) => row.evaluatorId);
+
+  if (evaluatorIds.length === 0) {
+    return {
+      totalItems,
+      groups: [],
+    };
+  }
+
   const templates = await prisma.evalTemplate.findMany({
     where: {
       projectId: params.projectId,
       evaluatorId: {
-        not: null,
+        in: evaluatorIds,
       },
     },
-    orderBy: [{ updatedAt: "desc" }, { version: "desc" }],
+    orderBy: [{ evaluatorId: "asc" }, { version: "asc" }],
   });
 
   const groupedTemplates = new Map<string, StoredPublicEvaluatorTemplate[]>();
@@ -153,20 +192,20 @@ export async function listPublicEvaluatorTemplateGroups(params: {
     groupedTemplates.set(template.evaluatorId, existing);
   }
 
-  const groups = Array.from(groupedTemplates.values())
-    .map((group) => group.sort((left, right) => left.version - right.version))
-    .sort(
-      (left, right) =>
-        right[right.length - 1]!.updatedAt.getTime() -
-        left[left.length - 1]!.updatedAt.getTime(),
+  const groups = evaluatorIds
+    .map((evaluatorId) => groupedTemplates.get(evaluatorId) ?? [])
+    .filter(
+      (
+        group,
+      ): group is [
+        StoredPublicEvaluatorTemplate,
+        ...StoredPublicEvaluatorTemplate[],
+      ] => group.length > 0,
     );
-
-  const totalItems = groups.length;
-  const offset = (params.page - 1) * params.limit;
 
   return {
     totalItems,
-    groups: groups.slice(offset, offset + params.limit),
+    groups,
   };
 }
 
@@ -174,6 +213,10 @@ export async function countContinuousEvaluationsForEvaluatorIds(params: {
   projectId: string;
   evaluatorIds: string[];
 }) {
+  if (params.evaluatorIds.length === 0) {
+    return {};
+  }
+
   const configs = await prisma.jobConfiguration.findMany({
     where: {
       projectId: params.projectId,
