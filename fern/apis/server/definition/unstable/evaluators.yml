@@ -184,7 +184,8 @@ service:
       docs: |
         Delete an evaluator.
 
-        Deletion is only allowed when no continuous evaluations still reference the evaluator.
+        Deletion is only allowed when no job configurations still reference the evaluator.
+        This includes public continuous evaluations and any internal evaluation jobs that reuse the evaluator template.
         If the evaluator is still in use, the request fails with `409` and `code=evaluator_in_use`.
       method: DELETE
       path: /evaluators/{evaluatorId}

@@ -55,13 +55,41 @@ const STATIC_FILTER_OPTIONS_BY_TARGET = {
   Map<string, Set<string>>
 >;
 
+const SUPPORTED_FILTER_COLUMNS_BY_TARGET = {
+  observation: new Set(observationEvalFilterColumns.map((column) => column.id)),
+  experiment: new Set(
+    experimentEvalFilterColumns.map((column) =>
+      column.id === "experimentDatasetId" ? "datasetId" : column.id,
+    ),
+  ),
+} as const satisfies Record<PublicContinuousEvaluationTargetType, Set<string>>;
+
+const SUPPORTED_MAPPING_SOURCES_BY_TARGET = {
+  observation: new Set(["input", "output", "metadata"]),
+  experiment: new Set(["input", "output", "metadata", "expected_output"]),
+} as const satisfies Record<PublicContinuousEvaluationTargetType, Set<string>>;
+
 export function validateContinuousEvaluationFilters(params: {
   target: PublicContinuousEvaluationTargetType;
   filters: PublicContinuousEvaluationFilterType[];
 }) {
   const knownOptionValues = STATIC_FILTER_OPTIONS_BY_TARGET[params.target];
+  const supportedColumns = SUPPORTED_FILTER_COLUMNS_BY_TARGET[params.target];
 
   for (const [filterIndex, filter] of params.filters.entries()) {
+    if (!supportedColumns.has(filter.column)) {
+      throw createUnstablePublicApiError({
+        httpCode: 400,
+        code: "invalid_filter_value",
+        message: `Filter column "${filter.column}" is not supported for target "${params.target}"`,
+        details: {
+          field: `filter[${filterIndex}].column`,
+          column: filter.column,
+          allowedValues: Array.from(supportedColumns),
+        },
+      });
+    }
+
     const allowedValues = knownOptionValues.get(filter.column);
 
     if (
@@ -196,11 +224,26 @@ function validateJsonPath(params: {
 export function validateEvaluatorVariableMappings(params: {
   mappings: PublicContinuousEvaluationMappingType[];
   variables: string[];
+  target: PublicContinuousEvaluationTargetType;
 }) {
   const variableSet = new Set(params.variables);
   const mappedVariables = new Set<string>();
+  const allowedSources = SUPPORTED_MAPPING_SOURCES_BY_TARGET[params.target];
 
   for (const [mappingIndex, mapping] of params.mappings.entries()) {
+    if (!allowedSources.has(mapping.source)) {
+      throw createUnstablePublicApiError({
+        httpCode: 400,
+        code: "invalid_variable_mapping",
+        message: `Mapping source "${mapping.source}" is not supported for target "${params.target}"`,
+        details: {
+          field: `mapping[${mappingIndex}].source`,
+          variable: mapping.variable,
+          allowedValues: Array.from(allowedSources),
+        },
+      });
+    }
+
     if (!variableSet.has(mapping.variable)) {
       throw createUnstablePublicApiError({
         httpCode: 400,

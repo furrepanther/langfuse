@@ -181,7 +181,11 @@ export type {
 
 export const UnstablePublicApiPaginationQuery = z
   .object({
-    ...publicApiPaginationZod,
+    page: publicApiPaginationZod.page,
+    limit: z.preprocess(
+      (x) => (x === "" ? undefined : x),
+      z.coerce.number().gt(0).lte(100).default(50),
+    ),
   })
   .strict();
 

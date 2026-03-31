@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { extractVariables } from "@langfuse/shared";
-import { prisma } from "@langfuse/shared/src/db";
+import {
+  extractVariables,
+  LangfuseNotFoundError,
+  observationVariableMappingList,
+} from "@langfuse/shared";
+import { Prisma, prisma } from "@langfuse/shared/src/db";
 import type {
   PatchUnstableEvaluatorBodyType,
   PostUnstableEvaluatorBodyType,
@@ -22,6 +26,104 @@ import {
   assertEvaluatorNameIsAvailable,
 } from "./validation";
 import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
+
+async function loadLockedEvaluatorTemplatesOrThrow(params: {
+  tx: Prisma.TransactionClient;
+  projectId: string;
+  evaluatorId: string;
+}) {
+  const lockedTemplateIds = await params.tx.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`
+      SELECT id
+      FROM eval_templates
+      WHERE
+        project_id = ${params.projectId}
+        AND evaluator_id = ${params.evaluatorId}
+      ORDER BY version ASC
+      FOR UPDATE
+    `,
+  );
+
+  if (lockedTemplateIds.length === 0) {
+    throw new LangfuseNotFoundError(
+      "Evaluator not found within authorized project",
+    );
+  }
+
+  return params.tx.evalTemplate.findMany({
+    where: {
+      id: {
+        in: lockedTemplateIds.map((row) => row.id),
+      },
+    },
+    orderBy: {
+      version: "asc",
+    },
+  });
+}
+
+function assertReferencedJobConfigurationsSupportVariables(params: {
+  jobConfigurations: Array<{
+    id: string;
+    scoreName: string;
+    variableMapping: unknown;
+  }>;
+  evaluatorVariables: string[];
+}) {
+  const evaluatorVariableSet = new Set(params.evaluatorVariables);
+
+  for (const config of params.jobConfigurations) {
+    const parsedMappings = observationVariableMappingList.safeParse(
+      config.variableMapping,
+    );
+
+    if (!parsedMappings.success) {
+      throw createUnstablePublicApiError({
+        httpCode: 409,
+        code: "conflict",
+        message: `Evaluator cannot be updated because job configuration "${config.scoreName}" has corrupted variable mappings`,
+      });
+    }
+
+    const mappedVariables = new Set<string>();
+    const duplicateVariables = new Set<string>();
+
+    for (const mapping of parsedMappings.data) {
+      if (mappedVariables.has(mapping.templateVariable)) {
+        duplicateVariables.add(mapping.templateVariable);
+      }
+      mappedVariables.add(mapping.templateVariable);
+    }
+
+    const unsupportedVariables = Array.from(mappedVariables).filter(
+      (variable) => !evaluatorVariableSet.has(variable),
+    );
+    const missingVariables = params.evaluatorVariables.filter(
+      (variable) => !mappedVariables.has(variable),
+    );
+
+    if (
+      duplicateVariables.size > 0 ||
+      unsupportedVariables.length > 0 ||
+      missingVariables.length > 0
+    ) {
+      throw createUnstablePublicApiError({
+        httpCode: 409,
+        code: "conflict",
+        message: `Evaluator cannot be updated because job configuration "${config.scoreName}" would have invalid variable mappings after this change`,
+        details: {
+          variables: Array.from(
+            new Set([
+              ...Array.from(duplicateVariables),
+              ...unsupportedVariables,
+              ...missingVariables,
+            ]),
+          ),
+        },
+      });
+    }
+  }
+}
 
 export async function listPublicEvaluators(params: {
   projectId: string;
@@ -160,11 +262,47 @@ export async function updatePublicEvaluator(params: {
   });
 
   return prisma.$transaction(async (tx) => {
+    const currentTemplates = await loadLockedEvaluatorTemplatesOrThrow({
+      tx,
+      projectId: params.projectId,
+      evaluatorId: params.evaluatorId,
+    });
+    const currentLatestTemplate =
+      currentTemplates[currentTemplates.length - 1]!;
+
+    if (currentLatestTemplate.id !== latestTemplate.id) {
+      throw createUnstablePublicApiError({
+        httpCode: 409,
+        code: "conflict",
+        message: "Evaluator changed during update. Retry the request.",
+      });
+    }
+
     await assertEvaluatorNameIsAvailable({
       client: tx,
       projectId: params.projectId,
       name: nextName,
       evaluatorId: params.evaluatorId,
+    });
+
+    const nextVariables = extractVariables(nextPrompt);
+    const referencedJobConfigurations = await tx.jobConfiguration.findMany({
+      where: {
+        projectId: params.projectId,
+        evalTemplateId: {
+          in: currentTemplates.map((template) => template.id),
+        },
+      },
+      select: {
+        id: true,
+        scoreName: true,
+        variableMapping: true,
+      },
+    });
+
+    assertReferencedJobConfigurationsSupportVariables({
+      jobConfigurations: referencedJobConfigurations,
+      evaluatorVariables: nextVariables,
     });
 
     const createdTemplate = await tx.evalTemplate.create({
@@ -176,12 +314,12 @@ export async function updatePublicEvaluator(params: {
           params.input.description !== undefined
             ? params.input.description
             : latestTemplate.description,
-        version: latestTemplate.version + 1,
+        version: currentLatestTemplate.version + 1,
         prompt: nextPrompt,
         provider: nextModelConfig.provider,
         model: nextModelConfig.model,
         modelParams: nextModelConfig.modelParams,
-        vars: extractVariables(nextPrompt),
+        vars: nextVariables,
         outputDefinition: nextOutputDefinition,
       },
     });
@@ -190,7 +328,7 @@ export async function updatePublicEvaluator(params: {
       where: {
         projectId: params.projectId,
         evalTemplateId: {
-          in: templates.map((template) => template.id),
+          in: currentTemplates.map((template) => template.id),
         },
       },
       data: {
@@ -206,7 +344,7 @@ export async function updatePublicEvaluator(params: {
       });
 
     return toApiEvaluator({
-      templates: [...templates, createdTemplate],
+      templates: [...currentTemplates, createdTemplate],
       continuousEvaluationCount,
     });
   });
@@ -216,24 +354,36 @@ export async function deletePublicEvaluator(params: {
   projectId: string;
   evaluatorId: string;
 }) {
-  const templates = await findEvaluatorTemplateVersionsOrThrow(params);
-  const continuousEvaluationCount =
-    await countContinuousEvaluationsForEvaluator(params);
-
-  if (continuousEvaluationCount > 0) {
-    throw createUnstablePublicApiError({
-      httpCode: 409,
-      code: "evaluator_in_use",
-      message:
-        "Evaluator cannot be deleted while continuous evaluations still reference it",
+  await prisma.$transaction(async (tx) => {
+    const templates = await loadLockedEvaluatorTemplatesOrThrow({
+      tx,
+      projectId: params.projectId,
+      evaluatorId: params.evaluatorId,
     });
-  }
-
-  await prisma.evalTemplate.deleteMany({
-    where: {
-      id: {
-        in: templates.map((template) => template.id),
+    const referencingJobConfigurationCount = await tx.jobConfiguration.count({
+      where: {
+        projectId: params.projectId,
+        evalTemplateId: {
+          in: templates.map((template) => template.id),
+        },
       },
-    },
+    });
+
+    if (referencingJobConfigurationCount > 0) {
+      throw createUnstablePublicApiError({
+        httpCode: 409,
+        code: "evaluator_in_use",
+        message:
+          "Evaluator cannot be deleted while job configurations still reference it",
+      });
+    }
+
+    await tx.evalTemplate.deleteMany({
+      where: {
+        id: {
+          in: templates.map((template) => template.id),
+        },
+      },
+    });
   });
 }

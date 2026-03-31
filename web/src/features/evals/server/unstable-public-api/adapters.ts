@@ -334,6 +334,7 @@ export function toJobConfigurationInput(params: {
   validateEvaluatorVariableMappings({
     mappings: params.input.mapping,
     variables: params.evaluatorVariables,
+    target: params.input.target,
   });
 
   return {

@@ -18,8 +18,12 @@ import type {
 import {
   PatchUnstableContinuousEvaluationBody,
   PostUnstableContinuousEvaluationBody,
+  GetUnstableContinuousEvaluationsQuery,
 } from "@/src/features/public-api/types/unstable-continuous-evaluations";
-import { PatchUnstableEvaluatorBody } from "@/src/features/public-api/types/unstable-evaluators";
+import {
+  GetUnstableEvaluatorsQuery,
+  PatchUnstableEvaluatorBody,
+} from "@/src/features/public-api/types/unstable-evaluators";
 
 const numericOutputDefinition = createNumericEvalOutputDefinition({
   reasoningDescription: "Why the score was assigned",
@@ -111,6 +115,21 @@ describe("unstable public eval contracts", () => {
     expect(
       PatchUnstableEvaluatorBody.safeParse({
         outputDefinition: null,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-positive unstable pagination limits", () => {
+    expect(
+      GetUnstableEvaluatorsQuery.safeParse({
+        page: 1,
+        limit: 0,
+      }).success,
+    ).toBe(false);
+    expect(
+      GetUnstableContinuousEvaluationsQuery.safeParse({
+        page: 1,
+        limit: -1,
       }).success,
     ).toBe(false);
   });
@@ -229,6 +248,70 @@ describe("unstable public eval adapters", () => {
           field: "mapping[0].jsonPath",
           variable: "input",
           value: "$[",
+        },
+      },
+    );
+  });
+
+  it("rejects mapping sources that are incompatible with the selected target", () => {
+    expectUnstablePublicApiError(
+      () =>
+        toJobConfigurationInput({
+          input: {
+            name: "expected_output_match",
+            target: "observation",
+            enabled: true,
+            sampling: 1,
+            filter: [],
+            mapping: [
+              {
+                variable: "expected_output",
+                source: "expected_output",
+              },
+            ],
+          },
+          evaluatorVariables: ["expected_output"],
+        }),
+      {
+        code: "invalid_variable_mapping",
+        message:
+          'Mapping source "expected_output" is not supported for target "observation"',
+        details: {
+          field: "mapping[0].source",
+          variable: "expected_output",
+        },
+      },
+    );
+  });
+
+  it("rejects filter columns that are incompatible with the selected target", () => {
+    expectUnstablePublicApiError(
+      () =>
+        toJobConfigurationInput({
+          input: {
+            name: "answer_quality",
+            target: "experiment",
+            enabled: true,
+            sampling: 1,
+            filter: [
+              {
+                type: "stringOptions",
+                column: "type",
+                operator: "any of",
+                value: ["GENERATION"],
+              },
+            ],
+            mapping: [{ variable: "input", source: "input" }],
+          },
+          evaluatorVariables: ["input"],
+        }),
+      {
+        code: "invalid_filter_value",
+        message:
+          'Filter column "type" is not supported for target "experiment"',
+        details: {
+          field: "filter[0].column",
+          column: "type",
         },
       },
     );
