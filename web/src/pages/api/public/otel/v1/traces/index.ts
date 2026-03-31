@@ -166,6 +166,17 @@ export default withMiddlewares({
         ingestionVersion,
       });
 
+      // Validate span attributes before queueing — reject the entire batch if
+      // any span has an invalid cost_details or usage_details attribute.
+      const validationError = processor.validateResourceSpans(resourceSpans);
+      if (validationError) {
+        logger.warn(
+          `Rejected OTEL batch for project ${auth.scope.projectId}: ${validationError.attribute} on span ${validationError.spanId} is invalid (${validationError.reason})`,
+        );
+        res.status(400);
+        return { error: validationError.message };
+      }
+
       // At this point, we have the raw OpenTelemetry Span body. We upload the full batch to S3
       // and the OtelIngestionProcessor logic will handle processing in the worker container.
       return processor.publishToOtelIngestionQueue(resourceSpans);

@@ -18,12 +18,19 @@ import {
   instrumentSync,
   recordDistribution,
   UsageDetails,
+  CostDetails,
   extractToolsFromObservation,
   convertDefinitionsToMap,
   convertCallsToArrays,
 } from "../";
 
 import { LangfuseOtelSpanAttributes } from "./attributes";
+import {
+  isPlainObject,
+  JSON_OBJECT_ATTRIBUTES,
+  validateJsonObjectAttribute,
+  type ResourceSpanValidationError,
+} from "./validateResourceSpans";
 import { ObservationTypeMapperRegistry } from "./ObservationTypeMapper";
 import { env } from "../../env";
 import { OtelIngestionQueue } from "../redis/otelIngestionQueue";
@@ -220,6 +227,43 @@ export class OtelIngestionProcessor {
   }
 
   /**
+   * Validates that JSON-string attributes on OTEL spans contain valid objects.
+   * Reuses extractSpanAttributes / parseId so attribute format handling is not duplicated.
+   * Returns an error on the first invalid span, or null if all spans are valid.
+   */
+  validateResourceSpans(
+    resourceSpans: ResourceSpan[],
+  ): ResourceSpanValidationError | null {
+    if (!Array.isArray(resourceSpans)) {
+      return {
+        spanId: "unknown",
+        attribute: "resourceSpans",
+        reason: "invalid_payload",
+        message: "resourceSpans must be an array",
+      };
+    }
+    for (const resourceSpan of resourceSpans) {
+      for (const scopeSpan of resourceSpan?.scopeSpans ?? []) {
+        for (const span of scopeSpan?.spans ?? []) {
+          const attrs = this.extractSpanAttributes(span);
+          const spanId =
+            span?.spanId != null ? this.parseId(span.spanId) : "unknown";
+
+          for (const attr of JSON_OBJECT_ATTRIBUTES) {
+            const error = validateJsonObjectAttribute(
+              attrs[attr],
+              attr,
+              spanId,
+            );
+            if (error) return error;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Processes incoming resourceSpans and produces an event base record that can be enriched
    * using the IngestionService.
    * @param resourceSpans
@@ -348,6 +392,15 @@ export class OtelIngestionProcessor {
                   );
                 }
 
+                const costDetails = CostDetails.safeParse(
+                  this.extractCostDetails(spanAttributes),
+                );
+                if (!costDetails.success) {
+                  logger.warn(
+                    `Invalid cost details extracted from OTEL span for traceId ${traceId}: ${JSON.stringify(costDetails.error)}`,
+                  );
+                }
+
                 let toolDefinitions = undefined;
                 let toolCalls = undefined;
                 let toolCallNames = undefined;
@@ -438,7 +491,9 @@ export class OtelIngestionProcessor {
                   providedUsageDetails: usageDetails.success
                     ? usageDetails.data
                     : undefined,
-                  providedCostDetails: this.extractCostDetails(spanAttributes),
+                  providedCostDetails: costDetails.success
+                    ? costDetails.data
+                    : undefined,
 
                   // Properties
                   tags: this.extractTags(spanAttributes),
@@ -2113,21 +2168,51 @@ export class OtelIngestionProcessor {
     }
   }
 
+  /**
+   * Parses a JSON-encoded attribute that is expected to be a plain object.
+   *
+   * Returns:
+   *  - the parsed object on success
+   *  - `{}` if present but wrong type (non-object) — logged as warning
+   *  - `null` if absent or JSON.parse fails — signals caller to try fallback paths
+   *
+   * This preserves the original control flow: successful parse (even to wrong type)
+   * is a definitive result (no fallthrough), only absent/unparsable falls through.
+   *
+   * Normally we don't expect to strip an attribute this late. This is meant as the last
+   * line of defense to avoid failing an entire batch. Invalid input should be caught by API
+   * validation earlier in the pipeline, while absent or unparsable JSON can still happen.
+   */
+  private parseJsonObjectAttribute(
+    attributes: Record<string, unknown>,
+    key: string,
+  ): Record<string, unknown> | null {
+    if (!attributes[key]) return null;
+
+    try {
+      const parsed = JSON.parse(attributes[key] as string);
+      if (!isPlainObject(parsed)) {
+        logger.warn(
+          `Rejected non-object ${key} attribute for project ${this.projectId}, expected object, got ${typeof parsed}`,
+        );
+        return {};
+      }
+      return parsed;
+    } catch {
+      // Fallthrough
+      return null;
+    }
+  }
+
   private extractUsageDetails(
     attributes: Record<string, unknown>,
     instrumentationScopeName: string,
   ): Record<string, unknown> {
-    if (attributes[LangfuseOtelSpanAttributes.OBSERVATION_USAGE_DETAILS]) {
-      try {
-        return JSON.parse(
-          attributes[
-            LangfuseOtelSpanAttributes.OBSERVATION_USAGE_DETAILS
-          ] as string,
-        );
-      } catch {
-        // Fallthrough
-      }
-    }
+    const fromAttribute = this.parseJsonObjectAttribute(
+      attributes,
+      LangfuseOtelSpanAttributes.OBSERVATION_USAGE_DETAILS,
+    );
+    if (fromAttribute !== null) return fromAttribute;
 
     // Genkit
     if (instrumentationScopeName === "genkit-tracer") {
@@ -2368,17 +2453,11 @@ export class OtelIngestionProcessor {
   private extractCostDetails(
     attributes: Record<string, unknown>,
   ): Record<string, unknown> {
-    if (attributes[LangfuseOtelSpanAttributes.OBSERVATION_COST_DETAILS]) {
-      try {
-        return JSON.parse(
-          attributes[
-            LangfuseOtelSpanAttributes.OBSERVATION_COST_DETAILS
-          ] as string,
-        );
-      } catch {
-        // Fallthrough
-      }
-    }
+    const fromAttribute = this.parseJsonObjectAttribute(
+      attributes,
+      LangfuseOtelSpanAttributes.OBSERVATION_COST_DETAILS,
+    );
+    if (fromAttribute !== null) return fromAttribute;
 
     if (attributes["gen_ai.usage.cost"]) {
       return { total: attributes["gen_ai.usage.cost"] };
