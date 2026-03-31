@@ -92,7 +92,7 @@ export function toStoredModelConfig(
   return {
     provider: modelConfig.provider,
     model: modelConfig.model,
-    modelParams: modelConfig.modelParams ?? undefined,
+    modelParams: undefined,
   };
 }
 
@@ -138,8 +138,6 @@ export function toApiModelConfig(
   return {
     provider: template.provider,
     model: template.model,
-    modelParams:
-      template.modelParams as PublicEvaluatorModelConfigType["modelParams"],
   };
 }
 

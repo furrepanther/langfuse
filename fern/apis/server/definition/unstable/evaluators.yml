@@ -58,7 +58,7 @@ service:
 
               Return a score between 0 and 1.
             outputDefinition:
-              version: 1
+              version: 2
               dataType: NUMERIC
               reasoning:
                 description: Explain why the score was assigned.
@@ -67,8 +67,6 @@ service:
             modelConfig:
               provider: openai
               model: gpt-4.1-mini
-              modelParams:
-                temperature: 0
           response:
             body:
               id: evaltmpl_123
@@ -90,7 +88,7 @@ service:
                 - input
                 - output
               outputDefinition:
-                version: 1
+                version: 2
                 dataType: NUMERIC
                 reasoning:
                   description: Explain why the score was assigned.
@@ -99,8 +97,6 @@ service:
               modelConfig:
                 provider: openai
                 model: gpt-4.1-mini
-                modelParams:
-                  temperature: 0
               continuousEvaluationCount: 0
               createdAt: "2026-03-30T09:00:00.000Z"
               updatedAt: "2026-03-30T09:00:00.000Z"
@@ -192,8 +188,11 @@ types:
 
           Every variable in this list must be mapped exactly once when creating a continuous evaluation.
       outputDefinition:
-        type: unknown
-        docs: Structured output schema that the evaluator must return.
+        type: commons.EvaluatorOutputDefinition
+        docs: |
+          Structured output schema that the evaluator must return.
+
+          New integrations should prefer the explicit version `2` shapes.
       modelConfig:
         type: nullable<commons.EvaluatorModelConfig>
         docs: Explicit model configuration, or `null` when the project default evaluation model is used.
@@ -227,8 +226,11 @@ types:
         type: string
         docs: Prompt template used by the evaluator.
       outputDefinition:
-        type: unknown
-        docs: Structured output schema the evaluator must return.
+        type: commons.EvaluatorOutputDefinition
+        docs: |
+          Structured output schema the evaluator must return.
+
+          New integrations should prefer the explicit version `2` shapes.
       modelConfig:
         type: optional<nullable<commons.EvaluatorModelConfig>>
         docs: Optional explicit model configuration. Omit or set to `null` to use the project default evaluation model.

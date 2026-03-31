@@ -25,7 +25,11 @@ const STATIC_FILTER_OPTIONS_BY_TARGET = {
       return [
         [
           column.id,
-          new Set(column.options.map((option) => String(option.value))),
+          new Set(
+            column.options.flatMap((option) =>
+              "value" in option ? [String(option.value)] : option.values,
+            ),
+          ),
         ] as const,
       ];
     }),
@@ -43,7 +47,11 @@ const STATIC_FILTER_OPTIONS_BY_TARGET = {
       return [
         [
           column.id === "experimentDatasetId" ? "datasetId" : column.id,
-          new Set(column.options.map((option) => String(option.value))),
+          new Set(
+            column.options.flatMap((option) =>
+              "value" in option ? [String(option.value)] : option.values,
+            ),
+          ),
         ] as const,
       ];
     }),
@@ -138,44 +146,47 @@ function validateJsonPath(params: {
     });
   }
 
-  const delimiters: Record<string, string> = {
-    "[": "]",
-    "(": ")",
-  };
-  const closingDelimiters = new Set(Object.values(delimiters));
-  const stack: string[] = [];
-  let activeQuote: "'" | '"' | null = null;
+  let openQuote: "'" | '"' | null = null;
+  let isEscaped = false;
+  const delimiterStack: Array<"[" | "("> = [];
 
-  for (let i = 0; i < jsonPath.length; i++) {
-    const char = jsonPath[i];
-    const previousChar = i > 0 ? jsonPath[i - 1] : null;
-
-    if ((char === "'" || char === '"') && previousChar !== "\\") {
-      if (activeQuote === char) {
-        activeQuote = null;
-      } else if (!activeQuote) {
-        activeQuote = char;
+  for (const character of jsonPath) {
+    if (openQuote) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
       }
+
+      if (character === "\\") {
+        isEscaped = true;
+        continue;
+      }
+
+      if (character === openQuote) {
+        openQuote = null;
+      }
+
       continue;
     }
 
-    if (activeQuote) {
+    if (character === "'" || character === '"') {
+      openQuote = character;
       continue;
     }
 
-    if (char in delimiters) {
-      stack.push(char);
+    if (character === "[" || character === "(") {
+      delimiterStack.push(character);
       continue;
     }
 
-    if (closingDelimiters.has(char)) {
-      const openingDelimiter = stack.pop();
+    if (character === "]" || character === ")") {
+      const expectedDelimiter = character === "]" ? "[" : "(";
 
-      if (!openingDelimiter || delimiters[openingDelimiter] !== char) {
+      if (delimiterStack.pop() !== expectedDelimiter) {
         throw createUnstablePublicApiError({
           httpCode: 400,
           code: "invalid_json_path",
-          message: `Mapping for variable "${variable}" has an invalid jsonPath "${jsonPath}". JSONPath delimiters are not balanced.`,
+          message: `Mapping for variable "${variable}" has an invalid jsonPath "${jsonPath}". JSONPath expressions must use balanced brackets and parentheses.`,
           details: {
             field: `mapping[${mappingIndex}].jsonPath`,
             variable,
@@ -186,11 +197,11 @@ function validateJsonPath(params: {
     }
   }
 
-  if (activeQuote || stack.length > 0) {
+  if (openQuote || delimiterStack.length > 0) {
     throw createUnstablePublicApiError({
       httpCode: 400,
       code: "invalid_json_path",
-      message: `Mapping for variable "${variable}" has an invalid jsonPath "${jsonPath}". JSONPath delimiters are not balanced.`,
+      message: `Mapping for variable "${variable}" has an invalid jsonPath "${jsonPath}". JSONPath expressions must use balanced quotes, brackets, and parentheses.`,
       details: {
         field: `mapping[${mappingIndex}].jsonPath`,
         variable,
@@ -302,7 +313,6 @@ export async function assertEvaluatorDefinitionCanRunForPublicApi(params: {
     name: string;
     provider?: string | null;
     model?: string | null;
-    modelParams?: unknown;
     outputDefinition: unknown;
   };
 }) {

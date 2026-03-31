@@ -64,12 +64,21 @@ describe("unstable public eval contracts", () => {
       description: "future field",
       prompt: "Judge {{input}} against {{output}}",
       outputDefinition: numericOutputDefinition,
+      modelConfig: {
+        provider: "openai",
+        model: "gpt-4.1-mini",
+        futureSetting: "ignored",
+      },
     });
 
     expect(parsed).toEqual({
       name: "Answer correctness",
       prompt: "Judge {{input}} against {{output}}",
       outputDefinition: numericOutputDefinition,
+      modelConfig: {
+        provider: "openai",
+        model: "gpt-4.1-mini",
+      },
     });
   });
 
@@ -151,6 +160,42 @@ describe("unstable public eval contracts", () => {
 
     expect(parsed).toEqual({
       name: "answer_quality",
+    });
+  });
+
+  it("preserves target-specific patch fields instead of dropping them into the untargeted schema", () => {
+    const parsed = PatchUnstableContinuousEvaluationBody.parse({
+      name: "experiment-expected-output-match",
+      target: "experiment",
+      filter: [
+        {
+          type: "stringOptions",
+          column: "datasetId",
+          operator: "any of",
+          value: ["dataset-prod"],
+        },
+      ],
+      mapping: [
+        { variable: "output", source: "output" },
+        { variable: "expected_output", source: "expected_output" },
+      ],
+    });
+
+    expect(parsed).toEqual({
+      name: "experiment-expected-output-match",
+      target: "experiment",
+      filter: [
+        {
+          type: "stringOptions",
+          column: "datasetId",
+          operator: "any of",
+          value: ["dataset-prod"],
+        },
+      ],
+      mapping: [
+        { variable: "output", source: "output" },
+        { variable: "expected_output", source: "expected_output" },
+      ],
     });
   });
 });
@@ -387,6 +432,10 @@ describe("unstable public eval adapters", () => {
       version: 7,
       scope: "managed",
       type: "llm_as_judge",
+      modelConfig: {
+        provider: "openai",
+        model: "gpt-4.1-mini",
+      },
       variables: ["input", "output"],
       continuousEvaluationCount: 2,
     });

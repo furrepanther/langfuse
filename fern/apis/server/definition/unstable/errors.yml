@@ -120,9 +120,6 @@ types:
       details:
         type: optional<PublicApiErrorDetails>
         docs: Optional structured error context. Inspect the populated fields based on `code`.
-      requestId:
-        type: optional<string>
-        docs: Optional request identifier for correlating client-side failures with server logs.
     examples:
       - name: InvalidFilterValue
         value:
@@ -198,8 +195,8 @@ errors:
       The request conflicts with existing state.
 
       Typical unstable-eval examples:
-      - evaluator name already exists in the project
-      - evaluator cannot be deleted because continuous evaluations still reference it
+      - evaluator version changed during concurrent creation
+      - the underlying state changed between read and write operations, so the client should retry
     status-code: 409
     type: PublicApiError
   UnprocessableContentError:

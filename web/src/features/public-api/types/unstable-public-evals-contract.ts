@@ -12,7 +12,6 @@ import {
   stringOptionsFilter,
   timeFilter,
   experimentEvalFilterColumns,
-  ZodModelConfig,
   booleanFilter,
 } from "@langfuse/shared";
 import { z } from "zod";
@@ -32,7 +31,6 @@ export const PublicEvaluatorScope = z.enum(["project", "managed"]);
 export const PublicEvaluatorModelConfig = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
-  modelParams: ZodModelConfig.nullish(),
 });
 
 export const PublicContinuousEvaluationTarget = z.enum([

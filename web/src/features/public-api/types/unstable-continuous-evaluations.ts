@@ -106,9 +106,9 @@ const ExperimentContinuousEvaluationPatch = z.object({
 
 export const PatchUnstableContinuousEvaluationBody = z
   .union([
-    UntargetedContinuousEvaluationPatch,
     ObservationContinuousEvaluationPatch,
     ExperimentContinuousEvaluationPatch,
+    UntargetedContinuousEvaluationPatch,
   ])
   .refine((data) => Object.keys(data).length > 0, {
     message:

@@ -49,6 +49,16 @@ function toBody(error: UnstablePublicApiError): UnstablePublicApiErrorBody {
   };
 }
 
+function toSerializableIssues(issues: ZodError["issues"]) {
+  return issues.map((issue) => ({
+    ...issue,
+    path: issue.path.filter(
+      (segment): segment is string | number =>
+        typeof segment === "string" || typeof segment === "number",
+    ),
+  }));
+}
+
 export function sendUnstablePublicApiErrorResponse(
   res: NextApiResponse,
   error: UnstablePublicApiError,
@@ -131,7 +141,7 @@ export function createUnstablePublicApiRequestValidationError(params: {
         ? "Invalid query parameters"
         : "Invalid request body",
     details: {
-      issues: params.error.issues,
+      issues: toSerializableIssues(params.error.issues),
     },
   });
 }
@@ -153,7 +163,7 @@ export function toUnstablePublicApiError(
       code: "invalid_request",
       message: "Invalid request data",
       details: {
-        issues: error.issues,
+        issues: toSerializableIssues(error.issues as ZodError["issues"]),
       },
     });
   }

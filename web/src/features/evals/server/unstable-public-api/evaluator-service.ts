@@ -64,7 +64,6 @@ export async function createPublicEvaluator(params: {
       name: params.input.name,
       provider: params.input.modelConfig?.provider ?? null,
       model: params.input.modelConfig?.model ?? null,
-      modelParams: params.input.modelConfig?.modelParams,
       outputDefinition: params.input.outputDefinition,
     },
   });

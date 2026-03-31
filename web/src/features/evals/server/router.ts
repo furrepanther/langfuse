@@ -8,6 +8,8 @@ import { auditLog } from "@/src/features/audit-logs/auditLog";
 import {
   DEFAULT_TRACE_JOB_DELAY,
   ZodModelConfig,
+  PersistedEvalOutputDefinitionSchema,
+  compilePersistedEvalOutputDefinition,
   deriveEvaluatorDisplayStateFromExecutionCounts,
   type OrderByState,
   singleFilter,
@@ -37,6 +39,7 @@ import {
   tableColumnsToSqlFilterAndPrefix,
   orderByToPrismaSql,
   DefaultEvalModelService,
+  testModelCall,
   invalidateProjectEvalConfigCaches,
 } from "@langfuse/shared/src/server";
 import { TRPCError } from "@trpc/server";

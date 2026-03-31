@@ -72,7 +72,6 @@ export async function createPublicContinuousEvaluation(params: {
         name: template.name,
         provider: template.provider,
         model: template.model,
-        modelParams: template.modelParams,
         outputDefinition: template.outputDefinition,
       },
     });
@@ -128,7 +127,10 @@ export async function updatePublicContinuousEvaluation(params: {
     projectId: params.projectId,
     evaluatorId: nextEvaluatorId,
   });
-  const nextTarget = params.input.target ?? existingPublic.target;
+  const nextTarget =
+    "target" in params.input && params.input.target !== undefined
+      ? params.input.target
+      : existingPublic.target;
   const nextFilter =
     "filter" in params.input && params.input.filter !== undefined
       ? params.input.filter
@@ -158,7 +160,6 @@ export async function updatePublicContinuousEvaluation(params: {
         name: template.name,
         provider: template.provider,
         model: template.model,
-        modelParams: template.modelParams,
         outputDefinition: template.outputDefinition,
       },
     });

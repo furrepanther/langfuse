@@ -74,15 +74,311 @@ types:
       model:
         type: string
         docs: Model identifier exposed by the provider, for example `gpt-4.1-mini`.
-      modelParams:
-        type: optional<nullable<map<string, unknown>>>
-        docs: Optional provider-specific model parameters such as temperature.
     examples:
       - value:
           provider: openai
           model: gpt-4.1-mini
-          modelParams:
-            temperature: 0
+
+  EvaluatorOutputDataType:
+    docs: Structured score type returned by an evaluator.
+    enum:
+      - NUMERIC
+      - BOOLEAN
+      - CATEGORICAL
+
+  EvaluatorOutputFieldDefinition:
+    properties:
+      description:
+        type: string
+        docs: Human-readable instructions for what the evaluator should return in this field.
+
+  LegacyEvaluatorOutputDefinition:
+    docs: |
+      Legacy evaluator output definition.
+
+      This shape is supported for backward compatibility, but new clients should prefer the v2 output definition shapes below.
+    properties:
+      reasoning:
+        type: string
+        docs: Instructions for the reasoning field.
+      score:
+        type: string
+        docs: Instructions for the score field.
+    examples:
+      - value:
+          reasoning: Explain why the answer is correct or incorrect.
+          score: Return a number between 0 and 1.
+
+  NumericEvaluatorOutputDefinitionV2:
+    properties:
+      version:
+        type: integer
+        docs: Output definition version. Must be `2`.
+      dataType:
+        type: EvaluatorOutputDataType
+        docs: Must be `NUMERIC`.
+      reasoning:
+        type: EvaluatorOutputFieldDefinition
+      score:
+        type: EvaluatorOutputFieldDefinition
+
+  BooleanEvaluatorOutputDefinitionV2:
+    properties:
+      version:
+        type: integer
+        docs: Output definition version. Must be `2`.
+      dataType:
+        type: EvaluatorOutputDataType
+        docs: Must be `BOOLEAN`.
+      reasoning:
+        type: EvaluatorOutputFieldDefinition
+      score:
+        type: EvaluatorOutputFieldDefinition
+
+  CategoricalEvaluatorOutputScoreV2:
+    properties:
+      description:
+        type: string
+        docs: Human-readable instructions for how the evaluator should choose categories.
+      categories:
+        type: list<string>
+        docs: Allowed category labels. Must contain at least two unique values.
+      shouldAllowMultipleMatches:
+        type: optional<boolean>
+        docs: Whether the evaluator may return more than one matching category.
+
+  CategoricalEvaluatorOutputDefinitionV2:
+    properties:
+      version:
+        type: integer
+        docs: Output definition version. Must be `2`.
+      dataType:
+        type: EvaluatorOutputDataType
+        docs: Must be `CATEGORICAL`.
+      reasoning:
+        type: EvaluatorOutputFieldDefinition
+      score:
+        type: CategoricalEvaluatorOutputScoreV2
+
+  EvaluatorOutputDefinitionV2:
+    discriminant: dataType
+    union:
+      NUMERIC:
+        type: NumericEvaluatorOutputDefinitionV2
+      BOOLEAN:
+        type: BooleanEvaluatorOutputDefinitionV2
+      CATEGORICAL:
+        type: CategoricalEvaluatorOutputDefinitionV2
+
+  EvaluatorOutputDefinition:
+    docs: |
+      Structured output definition for an evaluator.
+
+      New clients should prefer the version `2` shapes because they are explicit about the score data type and field descriptions.
+    discriminated: false
+    union:
+      - LegacyEvaluatorOutputDefinition
+      - EvaluatorOutputDefinitionV2
+    examples:
+      - name: NumericV2
+        value:
+          version: 2
+          dataType: NUMERIC
+          reasoning:
+            description: Explain why the answer is correct or incorrect.
+          score:
+            description: Return a score between 0 and 1.
+      - name: BooleanV2
+        value:
+          version: 2
+          dataType: BOOLEAN
+          reasoning:
+            description: Explain why the output satisfies the requirement.
+          score:
+            description: Return true if the output satisfies the requirement, otherwise false.
+      - name: CategoricalV2
+        value:
+          version: 2
+          dataType: CATEGORICAL
+          reasoning:
+            description: Explain which category best fits the output.
+          score:
+            description: Choose the best category.
+            categories:
+              - correct
+              - partially_correct
+              - incorrect
+            shouldAllowMultipleMatches: false
+
+  ContinuousEvaluationStringFilterOperator:
+    enum:
+      - name: Equals
+        value: "="
+      - name: Contains
+        value: contains
+      - name: DoesNotContain
+        value: does not contain
+      - name: StartsWith
+        value: starts with
+      - name: EndsWith
+        value: ends with
+
+  ContinuousEvaluationNumberFilterOperator:
+    enum:
+      - name: Equals
+        value: "="
+      - name: GreaterThan
+        value: ">"
+      - name: LessThan
+        value: "<"
+      - name: GreaterThanOrEqual
+        value: ">="
+      - name: LessThanOrEqual
+        value: "<="
+
+  ContinuousEvaluationOptionsFilterOperator:
+    enum:
+      - name: AnyOf
+        value: any of
+      - name: NoneOf
+        value: none of
+
+  ContinuousEvaluationArrayOptionsFilterOperator:
+    enum:
+      - name: AnyOf
+        value: any of
+      - name: NoneOf
+        value: none of
+      - name: AllOf
+        value: all of
+
+  ContinuousEvaluationBooleanFilterOperator:
+    enum:
+      - name: Equals
+        value: "="
+      - name: NotEquals
+        value: "<>"
+
+  ContinuousEvaluationNullFilterOperator:
+    enum:
+      - name: IsNull
+        value: is null
+      - name: IsNotNull
+        value: is not null
+
+  DateTimeContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Column to filter on.
+      operator:
+        type: ContinuousEvaluationNumberFilterOperator
+        docs: Comparison operator for datetime values.
+      value:
+        type: datetime
+        docs: Datetime value to compare against.
+
+  StringContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Column to filter on.
+      operator:
+        type: ContinuousEvaluationStringFilterOperator
+      value:
+        type: string
+
+  NumberContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Column to filter on.
+      operator:
+        type: ContinuousEvaluationNumberFilterOperator
+      value:
+        type: double
+
+  StringOptionsContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Column to filter on.
+      operator:
+        type: ContinuousEvaluationOptionsFilterOperator
+      value:
+        type: list<string>
+        docs: One or more allowed string values.
+
+  ArrayOptionsContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Column to filter on.
+      operator:
+        type: ContinuousEvaluationArrayOptionsFilterOperator
+      value:
+        type: list<string>
+        docs: One or more array elements to match.
+
+  StringObjectContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Object-valued column to filter on, for example `metadata`.
+      key:
+        type: string
+        docs: Key inside the object-valued column to filter on.
+      operator:
+        type: ContinuousEvaluationStringFilterOperator
+      value:
+        type: string
+
+  NumberObjectContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Object-valued column to filter on.
+      key:
+        type: string
+        docs: Key inside the object-valued column to filter on.
+      operator:
+        type: ContinuousEvaluationNumberFilterOperator
+      value:
+        type: double
+
+  CategoryOptionsContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Object-valued column to filter on.
+      key:
+        type: string
+        docs: Key inside the object-valued column to filter on.
+      operator:
+        type: ContinuousEvaluationOptionsFilterOperator
+      value:
+        type: list<string>
+
+  BooleanContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Column to filter on.
+      operator:
+        type: ContinuousEvaluationBooleanFilterOperator
+      value:
+        type: boolean
+
+  NullContinuousEvaluationFilter:
+    properties:
+      column:
+        type: string
+        docs: Column to filter on.
+      operator:
+        type: ContinuousEvaluationNullFilterOperator
+      value:
+        type: optional<string>
+        docs: Ignored placeholder value. Clients may omit it or send an empty string.
 
   ContinuousEvaluationMapping:
     docs: |
@@ -124,8 +420,8 @@ types:
     docs: |
       Filter condition used to decide whether a live-ingested target should be evaluated.
 
-      Each filter object follows the same filter schema used elsewhere in the Langfuse API.
-      The exact `column`, `operator`, and `value` fields depend on the selected filter `type`.
+      Each filter object follows the same typed filter schema used elsewhere in the Langfuse API.
+      The exact `column`, `operator`, `key`, and `value` fields depend on the selected filter `type`.
 
       Common examples:
       - Observation type filter:
@@ -138,7 +434,28 @@ types:
       Target-specific notes:
       - `observation` supports columns such as `type`, `name`, `environment`, `level`, `version`, `traceName`, `userId`, `sessionId`, `tags`, `metadata`, and `parentObservationId`.
       - `experiment` currently supports `datasetId`.
-    type: map<string, unknown>
+    discriminant: type
+    union:
+      "datetime":
+        type: DateTimeContinuousEvaluationFilter
+      "string":
+        type: StringContinuousEvaluationFilter
+      "number":
+        type: NumberContinuousEvaluationFilter
+      "stringOptions":
+        type: StringOptionsContinuousEvaluationFilter
+      "categoryOptions":
+        type: CategoryOptionsContinuousEvaluationFilter
+      "arrayOptions":
+        type: ArrayOptionsContinuousEvaluationFilter
+      "stringObject":
+        type: StringObjectContinuousEvaluationFilter
+      "numberObject":
+        type: NumberObjectContinuousEvaluationFilter
+      "boolean":
+        type: BooleanContinuousEvaluationFilter
+      "null":
+        type: NullContinuousEvaluationFilter
     examples:
       - name: ObservationTypeFilter
         value:

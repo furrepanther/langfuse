@@ -6643,7 +6643,7 @@ paths:
                       - input
                       - output
                     outputDefinition:
-                      version: 1
+                      version: 2
                       dataType: NUMERIC
                       reasoning:
                         description: Explain why the score was assigned.
@@ -6652,8 +6652,6 @@ paths:
                     modelConfig:
                       provider: openai
                       model: gpt-4.1-mini
-                      modelParams:
-                        temperature: 0
                     continuousEvaluationCount: 0
                     createdAt: '2026-03-30T09:00:00.000Z'
                     updatedAt: '2026-03-30T09:00:00.000Z'
@@ -6729,7 +6727,7 @@ paths:
 
                     Return a score between 0 and 1.
                   outputDefinition:
-                    version: 1
+                    version: 2
                     dataType: NUMERIC
                     reasoning:
                       description: Explain why the score was assigned.
@@ -6738,8 +6736,6 @@ paths:
                   modelConfig:
                     provider: openai
                     model: gpt-4.1-mini
-                    modelParams:
-                      temperature: 0
     get:
       description: >-
         List the evaluators available to the authenticated project.
@@ -11834,14 +11830,405 @@ components:
             Model identifier exposed by the provider, for example
             `gpt-4.1-mini`.
           example: gpt-4.1-mini
-        modelParams:
-          type: object
-          additionalProperties: true
-          nullable: true
-          description: Optional provider-specific model parameters such as temperature.
       required:
         - provider
         - model
+    unstableEvaluatorOutputDataType:
+      title: unstableEvaluatorOutputDataType
+      type: string
+      enum:
+        - NUMERIC
+        - BOOLEAN
+        - CATEGORICAL
+      description: Structured score type returned by an evaluator.
+    unstableEvaluatorOutputFieldDefinition:
+      title: unstableEvaluatorOutputFieldDefinition
+      type: object
+      properties:
+        description:
+          type: string
+          description: >-
+            Human-readable instructions for what the evaluator should return in
+            this field.
+      required:
+        - description
+    unstableLegacyEvaluatorOutputDefinition:
+      title: unstableLegacyEvaluatorOutputDefinition
+      type: object
+      description: >-
+        Legacy evaluator output definition.
+
+
+        This shape is supported for backward compatibility, but new clients
+        should prefer the v2 output definition shapes below.
+      properties:
+        reasoning:
+          type: string
+          description: Instructions for the reasoning field.
+          example: Explain why the answer is correct or incorrect.
+        score:
+          type: string
+          description: Instructions for the score field.
+          example: Return a number between 0 and 1.
+      required:
+        - reasoning
+        - score
+    unstableNumericEvaluatorOutputDefinitionV2:
+      title: unstableNumericEvaluatorOutputDefinitionV2
+      type: object
+      properties:
+        version:
+          type: integer
+          description: Output definition version. Must be `2`.
+        dataType:
+          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
+          description: Must be `NUMERIC`.
+        reasoning:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+        score:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+      required:
+        - version
+        - dataType
+        - reasoning
+        - score
+    unstableBooleanEvaluatorOutputDefinitionV2:
+      title: unstableBooleanEvaluatorOutputDefinitionV2
+      type: object
+      properties:
+        version:
+          type: integer
+          description: Output definition version. Must be `2`.
+        dataType:
+          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
+          description: Must be `BOOLEAN`.
+        reasoning:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+        score:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+      required:
+        - version
+        - dataType
+        - reasoning
+        - score
+    unstableCategoricalEvaluatorOutputScoreV2:
+      title: unstableCategoricalEvaluatorOutputScoreV2
+      type: object
+      properties:
+        description:
+          type: string
+          description: >-
+            Human-readable instructions for how the evaluator should choose
+            categories.
+        categories:
+          type: array
+          items:
+            type: string
+          description: Allowed category labels. Must contain at least two unique values.
+        shouldAllowMultipleMatches:
+          type: boolean
+          nullable: true
+          description: Whether the evaluator may return more than one matching category.
+      required:
+        - description
+        - categories
+    unstableCategoricalEvaluatorOutputDefinitionV2:
+      title: unstableCategoricalEvaluatorOutputDefinitionV2
+      type: object
+      properties:
+        version:
+          type: integer
+          description: Output definition version. Must be `2`.
+        dataType:
+          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
+          description: Must be `CATEGORICAL`.
+        reasoning:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+        score:
+          $ref: '#/components/schemas/unstableCategoricalEvaluatorOutputScoreV2'
+      required:
+        - version
+        - dataType
+        - reasoning
+        - score
+    unstableEvaluatorOutputDefinitionV2:
+      title: unstableEvaluatorOutputDefinitionV2
+      oneOf:
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                dataType:
+                  type: string
+                  enum:
+                    - NUMERIC
+            - $ref: '#/components/schemas/unstableNumericEvaluatorOutputDefinitionV2'
+          required:
+            - dataType
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                dataType:
+                  type: string
+                  enum:
+                    - BOOLEAN
+            - $ref: '#/components/schemas/unstableBooleanEvaluatorOutputDefinitionV2'
+          required:
+            - dataType
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                dataType:
+                  type: string
+                  enum:
+                    - CATEGORICAL
+            - $ref: >-
+                #/components/schemas/unstableCategoricalEvaluatorOutputDefinitionV2
+          required:
+            - dataType
+    unstableEvaluatorOutputDefinition:
+      title: unstableEvaluatorOutputDefinition
+      oneOf:
+        - $ref: '#/components/schemas/unstableLegacyEvaluatorOutputDefinition'
+        - $ref: '#/components/schemas/unstableEvaluatorOutputDefinitionV2'
+      description: >-
+        Structured output definition for an evaluator.
+
+
+        New clients should prefer the version `2` shapes because they are
+        explicit about the score data type and field descriptions.
+    unstableContinuousEvaluationStringFilterOperator:
+      title: unstableContinuousEvaluationStringFilterOperator
+      type: string
+      enum:
+        - '='
+        - contains
+        - does not contain
+        - starts with
+        - ends with
+    unstableContinuousEvaluationNumberFilterOperator:
+      title: unstableContinuousEvaluationNumberFilterOperator
+      type: string
+      enum:
+        - '='
+        - '>'
+        - <
+        - '>='
+        - <=
+    unstableContinuousEvaluationOptionsFilterOperator:
+      title: unstableContinuousEvaluationOptionsFilterOperator
+      type: string
+      enum:
+        - any of
+        - none of
+    unstableContinuousEvaluationArrayOptionsFilterOperator:
+      title: unstableContinuousEvaluationArrayOptionsFilterOperator
+      type: string
+      enum:
+        - any of
+        - none of
+        - all of
+    unstableContinuousEvaluationBooleanFilterOperator:
+      title: unstableContinuousEvaluationBooleanFilterOperator
+      type: string
+      enum:
+        - '='
+        - <>
+    unstableContinuousEvaluationNullFilterOperator:
+      title: unstableContinuousEvaluationNullFilterOperator
+      type: string
+      enum:
+        - is null
+        - is not null
+    unstableDateTimeContinuousEvaluationFilter:
+      title: unstableDateTimeContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationNumberFilterOperator
+          description: Comparison operator for datetime values.
+        value:
+          type: string
+          format: date-time
+          description: Datetime value to compare against.
+      required:
+        - column
+        - operator
+        - value
+    unstableStringContinuousEvaluationFilter:
+      title: unstableStringContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationStringFilterOperator
+        value:
+          type: string
+      required:
+        - column
+        - operator
+        - value
+    unstableNumberContinuousEvaluationFilter:
+      title: unstableNumberContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationNumberFilterOperator
+        value:
+          type: number
+          format: double
+      required:
+        - column
+        - operator
+        - value
+    unstableStringOptionsContinuousEvaluationFilter:
+      title: unstableStringOptionsContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationOptionsFilterOperator
+        value:
+          type: array
+          items:
+            type: string
+          description: One or more allowed string values.
+      required:
+        - column
+        - operator
+        - value
+    unstableArrayOptionsContinuousEvaluationFilter:
+      title: unstableArrayOptionsContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationArrayOptionsFilterOperator
+        value:
+          type: array
+          items:
+            type: string
+          description: One or more array elements to match.
+      required:
+        - column
+        - operator
+        - value
+    unstableStringObjectContinuousEvaluationFilter:
+      title: unstableStringObjectContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Object-valued column to filter on, for example `metadata`.
+        key:
+          type: string
+          description: Key inside the object-valued column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationStringFilterOperator
+        value:
+          type: string
+      required:
+        - column
+        - key
+        - operator
+        - value
+    unstableNumberObjectContinuousEvaluationFilter:
+      title: unstableNumberObjectContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Object-valued column to filter on.
+        key:
+          type: string
+          description: Key inside the object-valued column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationNumberFilterOperator
+        value:
+          type: number
+          format: double
+      required:
+        - column
+        - key
+        - operator
+        - value
+    unstableCategoryOptionsContinuousEvaluationFilter:
+      title: unstableCategoryOptionsContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Object-valued column to filter on.
+        key:
+          type: string
+          description: Key inside the object-valued column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationOptionsFilterOperator
+        value:
+          type: array
+          items:
+            type: string
+      required:
+        - column
+        - key
+        - operator
+        - value
+    unstableBooleanContinuousEvaluationFilter:
+      title: unstableBooleanContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Column to filter on.
+        operator:
+          $ref: >-
+            #/components/schemas/unstableContinuousEvaluationBooleanFilterOperator
+        value:
+          type: boolean
+      required:
+        - column
+        - operator
+        - value
+    unstableNullContinuousEvaluationFilter:
+      title: unstableNullContinuousEvaluationFilter
+      type: object
+      properties:
+        column:
+          type: string
+          description: Column to filter on.
+        operator:
+          $ref: '#/components/schemas/unstableContinuousEvaluationNullFilterOperator'
+        value:
+          type: string
+          nullable: true
+          description: >-
+            Ignored placeholder value. Clients may omit it or send an empty
+            string.
+      required:
+        - column
+        - operator
     unstableContinuousEvaluationMapping:
       title: unstableContinuousEvaluationMapping
       type: object
@@ -11888,17 +12275,131 @@ components:
         - source
     unstableContinuousEvaluationFilter:
       title: unstableContinuousEvaluationFilter
-      type: object
-      additionalProperties: true
+      oneOf:
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - datetime
+            - $ref: '#/components/schemas/unstableDateTimeContinuousEvaluationFilter'
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - string
+            - $ref: '#/components/schemas/unstableStringContinuousEvaluationFilter'
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - number
+            - $ref: '#/components/schemas/unstableNumberContinuousEvaluationFilter'
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - stringOptions
+            - $ref: >-
+                #/components/schemas/unstableStringOptionsContinuousEvaluationFilter
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - categoryOptions
+            - $ref: >-
+                #/components/schemas/unstableCategoryOptionsContinuousEvaluationFilter
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - arrayOptions
+            - $ref: >-
+                #/components/schemas/unstableArrayOptionsContinuousEvaluationFilter
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - stringObject
+            - $ref: >-
+                #/components/schemas/unstableStringObjectContinuousEvaluationFilter
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - numberObject
+            - $ref: >-
+                #/components/schemas/unstableNumberObjectContinuousEvaluationFilter
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - boolean
+            - $ref: '#/components/schemas/unstableBooleanContinuousEvaluationFilter'
+          required:
+            - type
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - 'null'
+            - $ref: '#/components/schemas/unstableNullContinuousEvaluationFilter'
+          required:
+            - type
       description: >-
         Filter condition used to decide whether a live-ingested target should be
         evaluated.
 
 
-        Each filter object follows the same filter schema used elsewhere in the
-        Langfuse API.
+        Each filter object follows the same typed filter schema used elsewhere
+        in the Langfuse API.
 
-        The exact `column`, `operator`, and `value` fields depend on the
+        The exact `column`, `operator`, `key`, and `value` fields depend on the
         selected filter `type`.
 
 
@@ -12320,12 +12821,6 @@ components:
           description: >-
             Optional structured error context. Inspect the populated fields
             based on `code`.
-        requestId:
-          type: string
-          nullable: true
-          description: >-
-            Optional request identifier for correlating client-side failures
-            with server logs.
       required:
         - message
         - code
@@ -12397,7 +12892,11 @@ components:
             - input
             - output
         outputDefinition:
-          description: Structured output schema that the evaluator must return.
+          $ref: '#/components/schemas/unstableEvaluatorOutputDefinition'
+          description: |-
+            Structured output schema that the evaluator must return.
+
+            New integrations should prefer the explicit version `2` shapes.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true
@@ -12473,7 +12972,11 @@ components:
 
             Return a score between 0 and 1.
         outputDefinition:
-          description: Structured output schema the evaluator must return.
+          $ref: '#/components/schemas/unstableEvaluatorOutputDefinition'
+          description: |-
+            Structured output schema the evaluator must return.
+
+            New integrations should prefer the explicit version `2` shapes.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true
