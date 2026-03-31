@@ -17,12 +17,15 @@ import {
 import { createNumericEvalOutputDefinition } from "@langfuse/shared";
 import { prisma } from "@langfuse/shared/src/db";
 import {
+  createAndAddApiKeysToDb,
+  createBasicAuthHeader,
   createOrgProjectAndApiKey,
-  getDisplaySecretKey,
-  hashSecretKey,
 } from "@langfuse/shared/src/server";
+import { ApiKeyScope } from "@prisma/client";
 import { UnstablePublicApiErrorResponse } from "@/src/features/public-api/types/unstable-public-evals-contract";
 import type { z } from "zod";
+import { LLMAdapter } from "@langfuse/shared";
+import { encrypt } from "@langfuse/shared/encryption";
 
 const __orgIds: string[] = [];
 const __managedTemplateIds: string[] = [];
@@ -31,6 +34,35 @@ const numericOutputDefinition = createNumericEvalOutputDefinition({
   reasoningDescription: "Why the score was assigned",
   scoreDescription: "A score between 0 and 1",
 });
+
+const provisionDefaultEvalModel = async (projectId: string) => {
+  const provider = `openai-${projectId}`;
+
+  const llmApiKey = await prisma.llmApiKeys.create({
+    data: {
+      projectId,
+      provider,
+      adapter: LLMAdapter.OpenAI,
+      secretKey: encrypt("sk-test"),
+      displaySecretKey: "...test",
+      baseURL: "https://api.openai.com/v1",
+      customModels: [],
+      withDefaultModels: true,
+      extraHeaders: null,
+      extraHeaderKeys: [],
+    },
+  });
+
+  await prisma.defaultLlmModel.create({
+    data: {
+      projectId,
+      llmApiKeyId: llmApiKey.id,
+      provider,
+      adapter: LLMAdapter.OpenAI,
+      model: "gpt-4.1-mini",
+    },
+  });
+};
 
 const expectUnstableError = (
   response: Awaited<ReturnType<typeof makeAPICall>>,
@@ -73,6 +105,7 @@ describe("/api/public/unstable evaluators API", () => {
     const result = await createOrgProjectAndApiKey();
     auth = result.auth;
     __orgIds.push(result.orgId);
+    await provisionDefaultEvalModel(result.projectId);
   });
 
   afterAll(async () => {
@@ -322,22 +355,17 @@ describe("/api/public/unstable evaluators API", () => {
   it("still rejects invalid auth with the unstable error envelope", async () => {
     const result = await createOrgProjectAndApiKey();
     __orgIds.push(result.orgId);
-
-    await prisma.apiKey.update({
-      where: {
-        id: result.apiKeyId,
-      },
-      data: {
-        scope: "ORG",
-        hashedSecretKey: hashSecretKey(getDisplaySecretKey(result.secretKey)),
-      },
+    const orgApiKey = await createAndAddApiKeysToDb({
+      prisma,
+      entityId: result.orgId,
+      scope: ApiKeyScope.ORGANIZATION,
     });
 
     const response = await makeAPICall(
       "GET",
       "/api/public/unstable/evaluators?page=1&limit=10",
       undefined,
-      result.auth,
+      createBasicAuthHeader(orgApiKey.publicKey, orgApiKey.secretKey),
     );
 
     expectUnstableError(response, {
