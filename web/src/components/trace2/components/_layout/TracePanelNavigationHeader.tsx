@@ -16,7 +16,7 @@ import { useTraceGraphData } from "../../contexts/TraceGraphDataContext";
 import { useV4Beta } from "@/src/features/events/hooks/useV4Beta";
 import { Command, CommandInput } from "@/src/components/ui/command";
 import { Button } from "@/src/components/ui/button";
-import { FoldVertical, UnfoldVertical, Download } from "lucide-react";
+import { FoldVertical, UnfoldVertical, Download, Loader2 } from "lucide-react";
 import { StringParam, useQueryParam } from "use-query-params";
 import { cn } from "@/src/utils/tailwind";
 import { useCallback } from "react";
@@ -28,6 +28,7 @@ import {
 import { TracePanelNavigationButton } from "./TracePanelNavigationButton";
 import { toast } from "sonner";
 import { TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD } from "@/src/features/traces/shared/traceDownloadConfig";
+import { useWatchedPromiseCallback } from "@/src/hooks/useWatchedPromiseCallback";
 
 interface TracePanelNavigationHeaderProps {
   isPanelCollapsed: boolean;
@@ -102,14 +103,14 @@ function TracePanelNavigationHeaderExpanded({
     }
   }, [isEverythingCollapsed, expandAll, collapseAll, getAllNodeIds, roots]);
 
-  const handleBetaDownload = useCallback(() => {
+  const handleBetaDownload = useCallback(async () => {
     if (observations.length >= TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD) {
       toast.warning(
         `Trace download excludes IO, metadata, toolDefinitions, and toolCalls for traces with ${TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD}+ observations.`,
       );
     }
 
-    void downloadServerTraceAsJson({
+    await downloadServerTraceAsJson({
       traceId: trace.id,
       projectId: trace.projectId,
     }).catch((error) => {
@@ -135,6 +136,15 @@ function TracePanelNavigationHeaderExpanded({
       );
     }
   }, [observations, trace]);
+
+  const [handleDownload, isDownloading] =
+    useWatchedPromiseCallback(async () => {
+      if (isBetaEnabled) {
+        await handleBetaDownload();
+      } else {
+        await handleLegacyDownload();
+      }
+    }, [handleBetaDownload, handleLegacyDownload, isBetaEnabled]);
 
   const isTimelineView = viewMode === "timeline";
 
@@ -183,11 +193,16 @@ function TracePanelNavigationHeaderExpanded({
           <Button
             variant="ghost"
             size="icon"
-            onClick={isBetaEnabled ? handleBetaDownload : handleLegacyDownload}
+            onClick={handleDownload}
+            disabled={isDownloading}
             title="Download trace as JSON"
             className="h-7 w-7"
           >
-            <Download className="h-3.5 w-3.5" />
+            {isDownloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
           </Button>
 
           {/* Timeline Toggle Button */}
