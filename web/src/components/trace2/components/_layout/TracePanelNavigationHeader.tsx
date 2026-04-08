@@ -13,6 +13,7 @@ import { useSearch } from "../../contexts/SearchContext";
 import { useSelection } from "../../contexts/SelectionContext";
 import { useTraceData } from "../../contexts/TraceDataContext";
 import { useTraceGraphData } from "../../contexts/TraceGraphDataContext";
+import { useV4Beta } from "@/src/features/events/hooks/useV4Beta";
 import { Command, CommandInput } from "@/src/components/ui/command";
 import { Button } from "@/src/components/ui/button";
 import { FoldVertical, UnfoldVertical, Download } from "lucide-react";
@@ -20,8 +21,13 @@ import { StringParam, useQueryParam } from "use-query-params";
 import { cn } from "@/src/utils/tailwind";
 import { useCallback } from "react";
 import { TraceSettingsDropdown } from "../TraceSettingsDropdown";
-import { downloadTraceAsJson } from "../../lib/download-trace";
+import {
+  downloadLegacyTraceAsJson,
+  downloadServerTraceAsJson,
+} from "../../lib/download-trace";
 import { TracePanelNavigationButton } from "./TracePanelNavigationButton";
+import { toast } from "sonner";
+import { TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD } from "@/src/features/traces/shared/traceDownloadConfig";
 
 interface TracePanelNavigationHeaderProps {
   isPanelCollapsed: boolean;
@@ -64,6 +70,7 @@ function TracePanelNavigationHeaderExpanded({
   const { expandAll, collapseAll, collapsedNodes } = useSelection();
   const { roots, trace, observations } = useTraceData();
   const { isGraphViewAvailable } = useTraceGraphData();
+  const { isBetaEnabled } = useV4Beta();
   const [viewMode, setViewMode] = useQueryParam("view", StringParam);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -95,12 +102,39 @@ function TracePanelNavigationHeaderExpanded({
     }
   }, [isEverythingCollapsed, expandAll, collapseAll, getAllNodeIds, roots]);
 
-  const handleDownload = useCallback(() => {
-    downloadTraceAsJson({
-      trace,
-      observations,
+  const handleBetaDownload = useCallback(() => {
+    if (observations.length >= TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD) {
+      toast.warning(
+        `Trace download excludes IO, metadata, toolDefinitions, and toolCalls for traces with ${TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD}+ observations.`,
+      );
+    }
+
+    void downloadServerTraceAsJson({
+      traceId: trace.id,
+      projectId: trace.projectId,
+    }).catch((error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to download trace JSON",
+      );
     });
-  }, [trace, observations]);
+  }, [observations.length, trace.id, trace.projectId]);
+
+  const handleLegacyDownload = useCallback(() => {
+    try {
+      downloadLegacyTraceAsJson({
+        trace,
+        observations,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to download trace JSON",
+      );
+    }
+  }, [observations, trace]);
 
   const isTimelineView = viewMode === "timeline";
 
@@ -149,7 +183,7 @@ function TracePanelNavigationHeaderExpanded({
           <Button
             variant="ghost"
             size="icon"
-            onClick={handleDownload}
+            onClick={isBetaEnabled ? handleBetaDownload : handleLegacyDownload}
             title="Download trace as JSON"
             className="h-7 w-7"
           >

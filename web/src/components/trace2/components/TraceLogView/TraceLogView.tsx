@@ -52,6 +52,7 @@ import { useObservationIOLoadedCount } from "./useLogViewObservationIO";
 import { useLogViewPreferences } from "./useLogViewPreferences";
 import { useLogViewDownload } from "./useLogViewDownload";
 import { useLogViewColumns } from "./useLogViewColumns";
+import { useV4Beta } from "@/src/features/events/hooks/useV4Beta";
 
 export interface TraceLogViewProps {
   traceId: string;
@@ -75,6 +76,7 @@ export const TraceLogView = ({
   projectId,
   currentView = "pretty",
 }: TraceLogViewProps) => {
+  const { isBetaEnabled } = useV4Beta();
   const { roots, observations } = useTraceData();
   const { logViewMode, logViewTreeStyle } = useViewPreferences();
   const { formattedExpansion, setFormattedFieldExpansion } = useJsonExpansion();
@@ -257,6 +259,29 @@ export const TraceLogView = ({
       buildDataFromCache: allObservationsIO.buildDataFromCache,
     });
 
+  const toolbarDownloadProps = useMemo(() => {
+    if (isBetaEnabled) {
+      // Hide download button entirely in v4.
+      // There is already a download button in the `TracePanelNavigationHeader`.
+      return {
+        onDownloadJson: undefined,
+        isDownloadCacheOnly: undefined,
+        isDownloadLoading: undefined,
+      };
+    }
+
+    return {
+      onDownloadJson: handleDownloadJson,
+      isDownloadCacheOnly,
+      isDownloadLoading: isDownloadOrCopyLoading,
+    };
+  }, [
+    isBetaEnabled,
+    handleDownloadJson,
+    isDownloadCacheOnly,
+    isDownloadOrCopyLoading,
+  ]);
+
   // Toggle JSON view collapse
   const handleToggleJsonCollapse = useCallback(() => {
     setJsonViewCollapsed((prev) => !prev);
@@ -278,15 +303,13 @@ export const TraceLogView = ({
         onToggleExpandAll={handleToggleExpandAll}
         allRowsExpanded={allRowsExpanded}
         onCopyJson={handleCopyJson}
-        onDownloadJson={handleDownloadJson}
-        isDownloadCacheOnly={isDownloadCacheOnly}
-        isDownloadLoading={isDownloadOrCopyLoading}
         currentView={currentView}
         indentEnabled={indentEnabled}
         indentDisabled={indentDisabled}
         onToggleIndent={() => setIndentEnabled(!indentEnabledPref)}
         showMilliseconds={showMilliseconds}
         onToggleMilliseconds={() => setShowMilliseconds(!showMilliseconds)}
+        {...toolbarDownloadProps}
       />
 
       {/* Empty states */}

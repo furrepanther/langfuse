@@ -48,6 +48,26 @@ import { recordDistribution } from "../instrumentation";
 import { DEFAULT_RENDERING_PROPS, RenderingProps } from "../utils/rendering";
 import { shouldSkipObservationsFinal } from "../queries/clickhouse-sql/query-options";
 
+export class TraceObservationsTooLargeError extends Error {
+  public readonly payloadSizeBytes: number;
+  public readonly limitBytes: number;
+
+  constructor(payloadSizeBytes: number, limitBytes: number) {
+    super(
+      `Observations in trace are too large: ${(payloadSizeBytes / 1e6).toFixed(2)}MB exceeds limit of ${(limitBytes / 1e6).toFixed(2)}MB`,
+    );
+    Object.setPrototypeOf(this, new.target.prototype);
+
+    this.name = "TraceObservationsTooLargeError";
+    this.payloadSizeBytes = payloadSizeBytes;
+    this.limitBytes = limitBytes;
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, TraceObservationsTooLargeError);
+    }
+  }
+}
+
 /**
  * Checks if observation exists in clickhouse.
  *
@@ -228,9 +248,10 @@ export const getObservationsForTrace = async <IncludeIO extends boolean>(
     });
 
     if (payloadSize >= env.LANGFUSE_API_TRACE_OBSERVATIONS_SIZE_LIMIT_BYTES) {
-      const errorMessage = `Observations in trace are too large: ${(payloadSize / 1e6).toFixed(2)}MB exceeds limit of ${(env.LANGFUSE_API_TRACE_OBSERVATIONS_SIZE_LIMIT_BYTES / 1e6).toFixed(2)}MB`;
-
-      throw new Error(errorMessage);
+      throw new TraceObservationsTooLargeError(
+        payloadSize,
+        env.LANGFUSE_API_TRACE_OBSERVATIONS_SIZE_LIMIT_BYTES,
+      );
     }
   }
 

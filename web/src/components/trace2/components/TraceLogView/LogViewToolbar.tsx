@@ -32,7 +32,7 @@ import {
 } from "@/src/components/ui/hover-card";
 import { cn } from "@/src/utils/tailwind";
 
-export interface LogViewToolbarProps {
+export type LogViewToolbarProps = {
   /** Current search query */
   searchQuery: string;
   /** Callback when search query changes */
@@ -49,10 +49,6 @@ export interface LogViewToolbarProps {
   allRowsExpanded?: boolean;
   /** Callback to copy JSON */
   onCopyJson?: () => void;
-  /** Callback to download JSON */
-  onDownloadJson?: () => void;
-  /** Whether download/copy uses cached I/O only (doesn't load all) */
-  isDownloadCacheOnly?: boolean;
   /** Current view type (pretty/json/json-beta) */
   currentView?: "pretty" | "json" | "json-beta";
   /** Whether indent visualization is enabled */
@@ -65,9 +61,21 @@ export interface LogViewToolbarProps {
   showMilliseconds?: boolean;
   /** Callback to toggle milliseconds display */
   onToggleMilliseconds?: () => void;
-  /** Whether download/copy is currently loading */
-  isDownloadLoading?: boolean;
-}
+} & (
+  | {
+      /** Callback to download JSON */
+      onDownloadJson: () => void;
+      /** Whether download/copy uses cached I/O only (doesn't load all) */
+      isDownloadCacheOnly: boolean;
+      /** Whether download/copy is currently loading */
+      isDownloadLoading: boolean;
+    }
+  | {
+      onDownloadJson?: undefined;
+      isDownloadCacheOnly?: undefined;
+      isDownloadLoading?: undefined;
+    }
+);
 
 /**
  * Toolbar for log view controls.
