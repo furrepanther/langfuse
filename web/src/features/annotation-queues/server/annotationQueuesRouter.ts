@@ -112,6 +112,7 @@ export const queueRouter = createTRPCRouter({
         await ctx.prisma.annotationQueueAssignment.findMany({
           where: {
             userId: ctx.session.user.id,
+            projectId: input.projectId,
           },
           select: {
             queueId: true,
