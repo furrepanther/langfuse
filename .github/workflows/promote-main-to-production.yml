@@ -19,16 +19,19 @@ jobs:
     steps:
       - name: Validate confirmation
         run: |
-          if [ "${{ github.event.inputs.confirm }}" != "promote" ]; then
+          if [ "${GITHUB_EVENT_INPUTS_CONFIRM}" != "promote" ]; then
             echo "Input 'confirm' must be 'promote'."
             exit 1
           fi
+        env:
+          GITHUB_EVENT_INPUTS_CONFIRM: ${{ github.event.inputs.confirm }}
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: main
           fetch-depth: 0
           token: ${{ secrets.GH_ACCESS_TOKEN }}
+          persist-credentials: false
 
       - name: Print commit refs
         run: |

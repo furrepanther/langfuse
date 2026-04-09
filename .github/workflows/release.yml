@@ -15,5 +15,6 @@ jobs:
           ref: main # Always checkout main even for tagged releases
           fetch-depth: 0
           token: ${{ secrets.GH_ACCESS_TOKEN }}
+          persist-credentials: false
       - name: Push to production
         run: git push origin +main:production
