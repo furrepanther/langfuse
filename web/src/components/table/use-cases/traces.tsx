@@ -86,6 +86,7 @@ import {
   type RefreshInterval,
   REFRESH_INTERVALS,
 } from "@/src/components/table/data-table-refresh-button";
+import { usePeekTableState } from "@/src/components/table/peek/contexts/PeekTableStateContext";
 import { useScoreColumns } from "@/src/features/scores/hooks/useScoreColumns";
 import { scoreFilters } from "@/src/features/scores/lib/scoreColumns";
 import TagList from "@/src/features/tag/components/TagList";
@@ -153,6 +154,7 @@ export default function TracesTable({
   externalDateRange,
   limitRows,
 }: TracesTableProps) {
+  const peekContext = usePeekTableState();
   const utils = api.useUtils();
   const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
   const [rawRefreshInterval, setRawRefreshInterval] =
@@ -332,8 +334,17 @@ export default function TracesTable({
     loading:
       traceFilterOptionsResponse.isPending ||
       environmentFilterOptions.isPending,
-    disableUrlPersistence: hideControls, // Disable URL persistence for embedded preview tables
-    sessionFilterContextId: projectId,
+    stateLocation: peekContext
+      ? [{ type: "peekContext", context: peekContext }]
+      : hideControls
+        ? [{ type: "memory" }]
+        : [
+            { type: "url" },
+            {
+              type: "sessionStorage",
+              sessionFilterContextId: projectId,
+            },
+          ],
     // Sidebar-only implicit environment defaults
     implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
   });

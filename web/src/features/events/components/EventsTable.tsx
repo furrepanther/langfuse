@@ -38,6 +38,7 @@ import {
 } from "@/src/utils/date-range-utils";
 import { type ScoreAggregate } from "@langfuse/shared";
 import TagList from "@/src/features/tag/components/TagList";
+import { usePeekTableState } from "@/src/components/table/peek/contexts/PeekTableStateContext";
 import useColumnOrder from "@/src/features/column-visibility/hooks/useColumnOrder";
 import { BatchExportTableButton } from "@/src/components/BatchExportTableButton";
 import { BreakdownTooltip } from "@/src/components/trace2/components/_shared/BreakdownToolTip";
@@ -184,6 +185,7 @@ export default function ObservationsEventsTable({
   limitRows,
   sessionId,
 }: EventsTableProps) {
+  const peekContext = usePeekTableState();
   const router = useRouter();
   const { viewId } = router.query;
 
@@ -360,8 +362,17 @@ export default function ObservationsEventsTable({
     filterOptions,
     {
       loading: isFilterOptionsPending,
-      disableUrlPersistence: hideControls, // Disable URL persistence for embedded preview tables
-      sessionFilterContextId: projectId,
+      stateLocation: peekContext
+        ? [{ type: "peekContext", context: peekContext }]
+        : hideControls
+          ? [{ type: "memory" }]
+          : [
+              { type: "url" },
+              {
+                type: "sessionStorage",
+                sessionFilterContextId: projectId,
+              },
+            ],
       // Sidebar-only implicit environment defaults
       implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
     },

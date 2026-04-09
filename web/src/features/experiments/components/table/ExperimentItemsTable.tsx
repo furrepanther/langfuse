@@ -35,6 +35,7 @@ import { TableSelectionManager } from "@/src/features/table/components/TableSele
 import { useSelectAll } from "@/src/features/table/hooks/useSelectAll";
 import useColumnVisibility from "@/src/features/column-visibility/hooks/useColumnVisibility";
 import { useExperimentItemsTableData } from "../../hooks/useExperimentItemsTableData";
+import { usePeekTableState } from "@/src/components/table/peek/contexts/PeekTableStateContext";
 import {
   type ExperimentItemsTableRow,
   type ExperimentItemsTableProps,
@@ -218,6 +219,7 @@ export default function ExperimentItemsTable({
   projectId,
   hideControls = false,
 }: ExperimentItemsTableProps) {
+  const peekContext = usePeekTableState();
   const { setDetailPageList } = useDetailPageLists();
   const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
 
@@ -280,7 +282,11 @@ export default function ExperimentItemsTable({
   const queryFilter = useSidebarFilterState(
     experimentItemsFilterConfig,
     {},
-    { disableSessionPersistence: true },
+    {
+      stateLocation: peekContext
+        ? [{ type: "peekContext", context: peekContext }]
+        : [{ type: "url" }],
+    },
   );
 
   // Create ref-based wrapper to avoid stale closure when queryFilter updates

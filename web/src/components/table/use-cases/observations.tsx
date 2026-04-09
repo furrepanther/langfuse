@@ -38,6 +38,7 @@ import { useOrderByState } from "@/src/features/orderBy/hooks/useOrderByState";
 import { useRowHeightLocalStorage } from "@/src/components/table/data-table-row-height-switch";
 import { MemoizedIOTableCell } from "../../ui/IOTableCell";
 import { useTableDateRange } from "@/src/hooks/useTableDateRange";
+import { usePeekTableState } from "@/src/components/table/peek/contexts/PeekTableStateContext";
 import {
   toAbsoluteTimeRange,
   type TableDateRange,
@@ -154,6 +155,7 @@ export default function ObservationsTable({
   externalDateRange,
   limitRows,
 }: ObservationsTableProps) {
+  const peekContext = usePeekTableState();
   const router = useRouter();
   const { viewId } = router.query;
   const utils = api.useUtils();
@@ -441,8 +443,17 @@ export default function ObservationsTable({
     newFilterOptions,
     {
       loading: filterOptions.isPending || environmentFilterOptions.isPending,
-      disableUrlPersistence: hideControls, // Disable URL persistence for embedded preview tables
-      sessionFilterContextId: projectId,
+      stateLocation: peekContext
+        ? [{ type: "peekContext", context: peekContext }]
+        : hideControls
+          ? [{ type: "memory" }]
+          : [
+              { type: "url" },
+              {
+                type: "sessionStorage",
+                sessionFilterContextId: projectId,
+              },
+            ],
       // Sidebar-only implicit environment defaults
       implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
     },

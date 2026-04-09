@@ -34,6 +34,7 @@ import {
 import { usePeekNavigation } from "@/src/components/table/peek/hooks/usePeekNavigation";
 import { PeekViewEvaluatorConfigDetail } from "@/src/components/table/peek/peek-evaluator-config-detail";
 import { TablePeekView } from "@/src/components/table/peek";
+import { usePeekTableState } from "@/src/components/table/peek/contexts/PeekTableStateContext";
 import { evalConfigTargetValues } from "@/src/server/api/definitions/evalConfigsTable";
 import {
   DropdownMenu,
@@ -111,6 +112,7 @@ function LegacyBadgeCell({ status }: { status: string }) {
 }
 
 export default function EvaluatorTable({ projectId }: { projectId: string }) {
+  const peekContext = usePeekTableState();
   const router = useRouter();
   const { setDetailPageList } = useDetailPageLists();
   const [paginationState, setPaginationState] = usePaginationState(0, 50, {
@@ -139,7 +141,15 @@ export default function EvaluatorTable({ projectId }: { projectId: string }) {
     newFilterOptions,
     {
       loading: false,
-      sessionFilterContextId: projectId,
+      stateLocation: peekContext
+        ? [{ type: "peekContext", context: peekContext }]
+        : [
+            { type: "url" },
+            {
+              type: "sessionStorage",
+              sessionFilterContextId: projectId,
+            },
+          ],
     },
   );
 

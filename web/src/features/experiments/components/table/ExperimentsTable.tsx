@@ -112,7 +112,13 @@ export default function ExperimentsTable({
     filterOptions,
     {
       loading: isFilterOptionsPending,
-      sessionFilterContextId,
+      stateLocation: [
+        { type: "url" },
+        {
+          type: "sessionStorage",
+          sessionFilterContextId,
+        },
+      ],
     },
   );
 

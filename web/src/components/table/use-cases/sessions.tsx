@@ -243,7 +243,13 @@ export default function SessionsTable({
     newFilterOptions,
     {
       loading: filterOptions.isPending || environmentFilterOptions.isPending,
-      sessionFilterContextId: projectId,
+      stateLocation: [
+        { type: "url" },
+        {
+          type: "sessionStorage",
+          sessionFilterContextId: projectId,
+        },
+      ],
       // Sidebar-only implicit environment defaults
       implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
     },
