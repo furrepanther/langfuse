@@ -375,7 +375,17 @@ export const queueRouter = createTRPCRouter({
         projectId: input.projectId,
         scope: "annotationQueues:CUD",
       });
-      const queue = await ctx.prisma.annotationQueue.delete({
+      const queue = await ctx.prisma.annotationQueue.findFirst({
+        where: {
+          id: input.queueId,
+          projectId: input.projectId,
+        },
+      });
+      if (!queue) {
+        throw new LangfuseNotFoundError("Queue not found in project");
+      }
+
+      await ctx.prisma.annotationQueue.delete({
         where: { id: input.queueId, projectId: input.projectId },
       });
 

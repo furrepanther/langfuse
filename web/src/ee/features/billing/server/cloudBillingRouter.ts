@@ -285,14 +285,29 @@ export const cloudBillingRouter = createTRPCRouter({
         return { invoices: [], hasMore: false, cursors: {} };
       }
 
-      return await createBillingServiceFromContext(ctx).getInvoices(
-        input.orgId,
-        {
-          limit: input.limit,
-          startingAfter: input.startingAfter,
-          endingBefore: input.endingBefore,
-        },
-      );
+      try {
+        return await createBillingServiceFromContext(ctx).getInvoices(
+          input.orgId,
+          {
+            limit: input.limit,
+            startingAfter: input.startingAfter,
+            endingBefore: input.endingBefore,
+          },
+        );
+      } catch (error) {
+        logger.error("cloudBilling.getInvoices:error", {
+          orgId: input.orgId,
+          error,
+        });
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Stripe error: ${error instanceof Error ? error.message : "Unknown Stripe error"}`,
+          cause: error as Error,
+        });
+      }
     }),
   getUsage: protectedOrganizationProcedure
     .input(
