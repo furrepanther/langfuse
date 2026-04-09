@@ -12,6 +12,9 @@ concurrency:
   group: sdk-api-spec-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   generate-sdk-api-specs:
     runs-on: ubuntu-latest

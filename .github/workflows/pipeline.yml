@@ -12,6 +12,9 @@ on:
     branches:
       - "**"
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -24,6 +27,7 @@ jobs:
       llm_connections_changed: ${{ steps.filter.outputs.llm_connections }}
     timeout-minutes: 15
     permissions:
+      contents: read
       pull-requests: read
     steps:
       - id: skip_check

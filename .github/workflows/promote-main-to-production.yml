@@ -12,6 +12,8 @@ concurrency:
   group: promote-main-to-production
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   promote:
     runs-on: ubuntu-latest

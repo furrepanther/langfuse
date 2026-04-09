@@ -10,10 +10,19 @@ on:
         type: string
         description: Name of the service to be deployed, e.g. web-ingestion, web, or worker.
         required: true
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      SENTRY_AUTH_TOKEN:
+        required: false
 jobs:
   ecs-deploy:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
     steps:
       - name: Get app name
         uses: winterjung/split@a211a1c46e35fcdc4097d59dd6282d4a9859651b # v2

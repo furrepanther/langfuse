@@ -5,6 +5,8 @@ on:
     tags:
       - "v3.[0-9]+.[0-9]+" # Semantic version tags
 
+permissions: {}
+
 jobs:
   release:
     runs-on: ubuntu-latest

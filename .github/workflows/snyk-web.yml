@@ -3,6 +3,10 @@ on:
   push:
     branches: ["production", "main"]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   snyk:
     runs-on: ubuntu-latest

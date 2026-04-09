@@ -1,0 +1,9 @@
+rules:
+  cache-poisoning:
+    ignore:
+      # The flagged caches live in CI/test jobs only. Our publish path is the
+      # tag-gated `push-docker-image` job, which rebuilds and pushes images
+      # without restoring these caches, so cached runtime artifacts do not flow
+      # into released images today.
+      # Revisit this ignore if release/publish jobs start restoring CI caches.
+      - pipeline.yml
