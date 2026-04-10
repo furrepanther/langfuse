@@ -41,18 +41,17 @@ const traceId = "trace-1";
 const makeSession = (overrides?: {
   admin?: boolean;
   projects?: Array<{ id: string }>;
-}): TraceExportSession =>
-  ({
-    user: {
-      email: "test@example.com",
-      admin: overrides?.admin ?? false,
-      organizations: [
-        {
-          projects: overrides?.projects ?? [{ id: projectId }],
-        },
-      ],
-    },
-  }) as any;
+}): TraceExportSession => ({
+  user: {
+    email: "test@example.com",
+    admin: overrides?.admin ?? false,
+    organizations: [
+      {
+        projects: overrides?.projects ?? [{ id: projectId }],
+      },
+    ],
+  },
+});
 
 const makeTrace = (overrides?: Record<string, unknown>) => ({
   id: traceId,
@@ -75,46 +74,45 @@ const makeTrace = (overrides?: Record<string, unknown>) => ({
   ...overrides,
 });
 
-const makeObservation = (overrides?: Record<string, unknown>) =>
-  ({
-    id: "obs-1",
-    traceId,
-    projectId,
-    userId: null,
-    sessionId: null,
-    environment: "default",
-    type: "SPAN",
-    startTime: new Date("2024-01-01T00:00:01.000Z"),
-    endTime: new Date("2024-01-01T00:00:02.000Z"),
-    name: "Observation 1",
-    metadata: { key: "value" },
-    parentObservationId: null,
-    level: "DEFAULT",
-    statusMessage: null,
-    version: null,
-    createdAt: new Date("2024-01-01T00:00:01.000Z"),
-    updatedAt: new Date("2024-01-01T00:00:02.000Z"),
-    model: null,
-    internalModelId: null,
-    modelParameters: null,
-    input: '{"input":"secret"}',
-    output: '{"output":"secret"}',
-    completionStartTime: null,
-    promptId: null,
-    promptName: null,
-    promptVersion: null,
-    usageDetails: { input: 90, output: 45, total: 135 },
-    costDetails: { total: 1.23 },
-    providedCostDetails: { total: 1.5 },
-    providedUsageDetails: { input: 100, output: 50, total: 150 },
-    totalCost: null,
-    usagePricingTierId: null,
-    usagePricingTierName: null,
-    toolDefinitions: null,
-    toolCalls: null,
-    toolCallNames: null,
-    ...overrides,
-  }) as any;
+const makeObservation = (overrides?: Record<string, unknown>) => ({
+  id: "obs-1",
+  traceId,
+  projectId,
+  userId: null,
+  sessionId: null,
+  environment: "default",
+  type: "SPAN",
+  startTime: new Date("2024-01-01T00:00:01.000Z"),
+  endTime: new Date("2024-01-01T00:00:02.000Z"),
+  name: "Observation 1",
+  metadata: { key: "value" },
+  parentObservationId: null,
+  level: "DEFAULT",
+  statusMessage: null,
+  version: null,
+  createdAt: new Date("2024-01-01T00:00:01.000Z"),
+  updatedAt: new Date("2024-01-01T00:00:02.000Z"),
+  model: null,
+  internalModelId: null,
+  modelParameters: null,
+  input: '{"input":"secret"}',
+  output: '{"output":"secret"}',
+  completionStartTime: null,
+  promptId: null,
+  promptName: null,
+  promptVersion: null,
+  usageDetails: { input: 90, output: 45, total: 135 },
+  costDetails: { total: 1.23 },
+  providedCostDetails: { total: 1.5 },
+  providedUsageDetails: { input: 100, output: 50, total: 150 },
+  totalCost: null,
+  usagePricingTierId: null,
+  usagePricingTierName: null,
+  toolDefinitions: null,
+  toolCalls: null,
+  toolCallNames: null,
+  ...overrides,
+});
 
 const makeScore = (overrides?: Record<string, unknown>) => ({
   id: "score-1",

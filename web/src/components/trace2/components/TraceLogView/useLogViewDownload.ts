@@ -29,15 +29,6 @@ export interface UseLogViewDownloadParams {
   buildDataFromCache: () => ObservationIOData[];
 }
 
-export interface UseLogViewDownloadReturn {
-  /** Copy JSON to clipboard handler */
-  handleCopyJson: () => Promise<void>;
-  /** Download JSON file handler */
-  handleDownloadJson: () => Promise<void>;
-  /** Whether copy/download operation is in progress */
-  isActionLoading: boolean;
-}
-
 /**
  * Hook for managing download and copy JSON functionality.
  */
@@ -49,7 +40,7 @@ export function useLogViewDownload({
   failedObservationIds,
   loadAllData,
   buildDataFromCache,
-}: UseLogViewDownloadParams): UseLogViewDownloadReturn {
+}: UseLogViewDownloadParams) {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   // Helper to download JSON data

@@ -103,50 +103,35 @@ function TracePanelNavigationHeaderExpanded({
     }
   }, [isEverythingCollapsed, expandAll, collapseAll, getAllNodeIds, roots]);
 
-  const handleBetaDownload = useCallback(async () => {
-    try {
-      await downloadServerTraceAsJson({
-        traceId: trace.id,
-        projectId: trace.projectId,
-      });
-
-      if (observations.length >= TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD) {
-        toast.warning(
-          `Trace download excludes IO, metadata, toolDefinitions, and toolCalls for traces with ${TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD}+ observations.`,
-        );
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to download trace JSON",
-      );
-    }
-  }, [observations.length, trace.id, trace.projectId]);
-
-  const handleLegacyDownload = useCallback(() => {
-    try {
-      downloadLegacyTraceAsJson({
-        trace,
-        observations,
-      });
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to download trace JSON",
-      );
-    }
-  }, [observations, trace]);
-
   const [handleDownload, isDownloading] =
     useWatchedPromiseCallback(async () => {
-      if (isBetaEnabled) {
-        await handleBetaDownload();
-      } else {
-        await handleLegacyDownload();
+      try {
+        if (!isBetaEnabled) {
+          downloadLegacyTraceAsJson({
+            trace,
+            observations,
+          });
+          return;
+        }
+
+        await downloadServerTraceAsJson({
+          traceId: trace.id,
+          projectId: trace.projectId,
+        });
+
+        if (observations.length >= TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD) {
+          toast.warning(
+            `Trace download excludes IO, metadata, toolDefinitions, and toolCalls for traces with ${TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD}+ observations.`,
+          );
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to download trace JSON",
+        );
       }
-    }, [handleBetaDownload, handleLegacyDownload, isBetaEnabled]);
+    }, [isBetaEnabled, observations, trace]);
 
   const isTimelineView = viewMode === "timeline";
 

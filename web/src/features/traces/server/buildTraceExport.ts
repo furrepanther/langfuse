@@ -1,9 +1,4 @@
-import {
-  LangfuseNotFoundError,
-  BaseError,
-  UnauthorizedError,
-} from "@langfuse/shared";
-import { type Session } from "next-auth";
+import { LangfuseNotFoundError, UnauthorizedError } from "@langfuse/shared";
 import {
   getTraceById,
   getScoresAndCorrectionsForTraces,
@@ -14,10 +9,9 @@ import { prisma } from "@langfuse/shared/src/db";
 import { sendAdminAccessWebhook } from "@/src/server/adminAccessWebhook";
 import { TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD } from "../shared/traceDownloadConfig";
 import { toDomainArrayWithStringifiedMetadata } from "@/src/utils/clientSideDomainTypes";
-import { type FullEventsObservation } from "../../../../../packages/shared/dist/src/server/queries/createGenerationsQuery";
 
-export type TraceExportSession = Session & {
-  user: NonNullable<Session["user"]> & {
+export type TraceExportSession = {
+  user: {
     email: string;
     admin?: boolean;
     organizations: Array<{
@@ -30,102 +24,16 @@ export type TraceExportSession = Session & {
 
 export type TraceExportAccessSession = TraceExportSession | null;
 
-export interface TraceExportObservation {
-  id: string;
-  traceId: string;
-  userId: string;
-  sessionId: string;
-  projectId: string;
-  startTime: string;
-  endTime: string | null;
-  parentObservationId: string | null;
-  type: string;
-  environment: string;
-  name: string | null;
-  level: string | null;
-  traceName: string;
-  statusMessage: string | null;
-  version: string | null;
-  createdAt: string;
-  updatedAt: string;
-  model: string | null;
-  internalModelId: string | null;
-  modelParameters: string | null;
-  completionStartTime: string | null;
-  promptId: string | null;
-  promptName: string | null;
-  promptVersion: number | null;
-  providedUsageDetails: Record<string, number>;
-  latency: number | null;
-  timeToFirstToken: number | null;
-  usageDetails: Record<string, number>;
-  costDetails: Record<string, number>;
-  providedCostDetails: Record<string, number>;
-  usagePricingTierId: string | null;
-  usagePricingTierName: string | null;
-  toolCallNames: string[];
-  tags: string[];
-  bookmarked: boolean;
-  public: boolean;
-  input?: string | null;
-  output?: string | null;
-  metadata?: string;
-  toolDefinitions?: Record<string, string>;
-  toolCalls?: string[];
-}
-
-export interface TraceExportScore {
-  id: string;
-  projectId: string;
-  environment: string;
-  name: string;
-  value: number;
-  source: string;
-  authorUserId: string | null;
-  comment: string | null;
-  configId: string | null;
-  queueId: string | null;
-  executionTraceId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  timestamp: string;
-  traceId: string | null;
-  sessionId: string | null;
-  datasetRunId: string | null;
-  observationId: string | null;
-  longStringValue: string;
-  stringValue: string | null;
-  dataType: string;
-  metadata: string | null;
-}
-
-export interface TraceExportPayload {
-  scores: TraceExportScore[];
-  observations: TraceExportObservation[];
-}
-
 const getDurationSeconds = (
   startTime: Date,
   endTime: Date | null,
 ): number | null => {
-  if (!startTime || !endTime) {
+  if (!endTime) {
     return null;
   }
 
   return (endTime.getTime() - startTime.getTime()) / 1000;
 };
-
-export interface BuildTraceExportParams {
-  traceId: string;
-  projectId: string;
-  session: TraceExportAccessSession;
-}
-
-export class TraceDownloadTooLargeError extends BaseError {
-  constructor(message: string) {
-    super("TraceDownloadTooLargeError", 422, message, true);
-  }
-}
 
 const hasProjectAccess = (
   session: TraceExportAccessSession,
@@ -227,7 +135,11 @@ export async function buildTraceExport({
   traceId,
   projectId,
   session,
-}: BuildTraceExportParams): Promise<TraceExportPayload> {
+}: {
+  traceId: string;
+  projectId: string;
+  session: TraceExportAccessSession;
+}) {
   const trace = await getAuthorizedTrace({
     traceId,
     projectId,
@@ -240,19 +152,12 @@ export async function buildTraceExport({
   });
   const omitLargeFields =
     observationRecordCount >= TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD;
-
-  let observationRecords: FullEventsObservation[] = [];
-  try {
-    observationRecords = (
-      await getObservationRecordsForTrace({
-        traceId,
-        projectId,
-        omitLargeFields,
-      })
-    ).observations;
-  } catch (error) {
-    throw error;
-  }
+  const { observations: observationRecords } =
+    await getObservationRecordsForTrace({
+      traceId,
+      projectId,
+      omitLargeFields,
+    });
 
   const scoreRecords = await getScoresAndCorrectionsForTraces({
     projectId,
@@ -275,8 +180,8 @@ export async function buildTraceExport({
     return {
       id: record.id,
       traceId: record.traceId ?? traceId,
-      userId: trace.userId ?? "",
-      sessionId: trace.sessionId ?? "",
+      userId: record.userId ?? null,
+      sessionId: record.sessionId ?? null,
       projectId: record.projectId,
       startTime: record.startTime.toISOString(),
       endTime: record.endTime?.toISOString() ?? null,
@@ -285,7 +190,7 @@ export async function buildTraceExport({
       environment: record.environment,
       name: record.name ?? null,
       level: record.level ?? null,
-      traceName: trace.name ?? "",
+      traceName: record.traceName ?? trace.name ?? "",
       statusMessage: record.statusMessage ?? null,
       version: record.version ?? null,
       createdAt: record.createdAt.toISOString(),

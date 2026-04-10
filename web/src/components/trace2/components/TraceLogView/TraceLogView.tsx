@@ -262,13 +262,6 @@ export const TraceLogView = ({
     buildDataFromCache: allObservationsIO.buildDataFromCache,
   });
 
-  const toolbarDownloadProps = useMemo(
-    () => ({
-      onDownloadJson: isBetaEnabled ? undefined : handleDownloadJson,
-    }),
-    [isBetaEnabled, handleDownloadJson],
-  );
-
   // Toggle JSON view collapse
   const handleToggleJsonCollapse = useCallback(() => {
     setJsonViewCollapsed((prev) => !prev);
@@ -298,7 +291,7 @@ export const TraceLogView = ({
         onToggleIndent={() => setIndentEnabled(!indentEnabledPref)}
         showMilliseconds={showMilliseconds}
         onToggleMilliseconds={() => setShowMilliseconds(!showMilliseconds)}
-        {...toolbarDownloadProps}
+        onDownloadJson={isBetaEnabled ? undefined : handleDownloadJson}
       />
 
       {/* Empty states */}

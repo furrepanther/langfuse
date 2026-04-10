@@ -3,7 +3,6 @@ import { withMiddlewares } from "@/src/features/public-api/server/withMiddleware
 import {
   buildTraceExport,
   type TraceExportAccessSession,
-  type TraceExportSession,
 } from "@/src/features/traces/server/buildTraceExport";
 import { getServerAuthSession } from "@/src/server/auth";
 import { z } from "zod";
@@ -20,15 +19,23 @@ function getTraceExportSession(
     return null;
   }
 
+  const { user } = session;
+
   if (
-    !session?.user ||
-    typeof session.user.email !== "string" ||
-    !Array.isArray(session.user.organizations)
+    !user ||
+    typeof user.email !== "string" ||
+    !Array.isArray(user.organizations)
   ) {
     throw new UnauthorizedError("Unauthorized");
   }
 
-  return session as TraceExportSession;
+  return {
+    user: {
+      email: user.email,
+      admin: user.admin,
+      organizations: user.organizations,
+    },
+  };
 }
 
 const buildDownloadFilename = (traceId: string) => `trace-${traceId}.json`;
