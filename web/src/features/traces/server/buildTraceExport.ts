@@ -2,25 +2,19 @@ import {
   LangfuseNotFoundError,
   BaseError,
   UnauthorizedError,
-  parseMetadataCHRecordToDomain,
 } from "@langfuse/shared";
 import { type Session } from "next-auth";
 import {
   getTraceById,
-  queryClickhouse,
-  shouldSkipObservationsFinal,
-  convertDateToClickhouseDateTime,
-  TRACE_TO_OBSERVATIONS_INTERVAL,
   getScoresAndCorrectionsForTraces,
-  type ObservationRecordReadType,
-  TraceObservationsTooLargeError,
-  convertNumericRecord,
+  getObservationsCountFromEventsTable,
+  getObservationsForTraceFromEventsTable,
 } from "@langfuse/shared/src/server";
 import { prisma } from "@langfuse/shared/src/db";
-import { env } from "@langfuse/shared/src/env";
 import { sendAdminAccessWebhook } from "@/src/server/adminAccessWebhook";
 import { TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD } from "../shared/traceDownloadConfig";
 import { toDomainArrayWithStringifiedMetadata } from "@/src/utils/clientSideDomainTypes";
+import { type FullEventsObservation } from "../../../../../packages/shared/dist/src/server/queries/createGenerationsQuery";
 
 export type TraceExportSession = Session & {
   user: NonNullable<Session["user"]> & {
@@ -108,30 +102,16 @@ export interface TraceExportPayload {
   observations: TraceExportObservation[];
 }
 
-const clickhouseDateTimeToIso = (value: string | null | undefined) => {
-  if (!value) {
-    return null;
-  }
-
-  return value.replace(" ", "T") + "Z";
-};
-
 const getDurationSeconds = (
-  startTime: string | null,
-  endTime: string | null,
+  startTime: Date,
+  endTime: Date | null,
 ): number | null => {
   if (!startTime || !endTime) {
     return null;
   }
 
-  return (new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000;
+  return (endTime.getTime() - startTime.getTime()) / 1000;
 };
-
-const getMetadataPayloadSize = (metadata: Record<string, string>) =>
-  Object.values(metadata).reduce(
-    (size, value) => size + (typeof value === "string" ? value.length : 0),
-    0,
-  );
 
 export interface BuildTraceExportParams {
   traceId: string;
@@ -153,143 +133,30 @@ const hasProjectAccess = (session: TraceExportSession, projectId: string) =>
 const getObservationRecordsForTrace = async (params: {
   traceId: string;
   projectId: string;
-  timestamp: Date;
   omitLargeFields: boolean;
 }) => {
-  const { traceId, projectId, timestamp, omitLargeFields } = params;
-  const skipDedup = await shouldSkipObservationsFinal(projectId);
+  const { traceId, projectId, omitLargeFields } = params;
 
-  const query = `
-  SELECT
-    id,
-    trace_id,
-    project_id,
-    type,
-    parent_observation_id,
-    environment,
-    start_time,
-    end_time,
-    name,
-    level,
-    ${
-      omitLargeFields
-        ? "CAST(map(), 'Map(String, String)') AS metadata,"
-        : "metadata,"
-    }
-    status_message,
-    version,
-    ${omitLargeFields ? "CAST(NULL, 'Nullable(String)') AS input," : "input,"}
-    ${omitLargeFields ? "CAST(NULL, 'Nullable(String)') AS output," : "output,"}
-    provided_model_name,
-    internal_model_id,
-    model_parameters,
-    provided_usage_details,
-    usage_details,
-    provided_cost_details,
-    cost_details,
-    total_cost,
-    usage_pricing_tier_id,
-    usage_pricing_tier_name,
-    completion_start_time,
-    prompt_id,
-    prompt_name,
-    prompt_version,
-    ${
-      omitLargeFields
-        ? "CAST(map(), 'Map(String, String)') AS tool_definitions,"
-        : "tool_definitions,"
-    }
-    ${
-      omitLargeFields
-        ? "CAST([], 'Array(String)') AS tool_calls,"
-        : "tool_calls,"
-    }
-    tool_call_names,
-    created_at,
-    updated_at,
-    event_ts,
-    is_deleted
-  FROM observations
-  WHERE trace_id = {traceId: String}
-  AND project_id = {projectId: String}
-  AND start_time >= {traceTimestamp: DateTime64(3)} - ${TRACE_TO_OBSERVATIONS_INTERVAL}
-  AND is_deleted = 0
-  ${skipDedup ? "" : "ORDER BY event_ts DESC"}
-  ${skipDedup ? "" : "LIMIT 1 BY id, project_id"}`;
-
-  const records = await queryClickhouse<ObservationRecordReadType>({
-    query,
-    params: {
-      traceId,
-      projectId,
-      traceTimestamp: convertDateToClickhouseDateTime(timestamp),
-    },
-    tags: {
-      feature: "tracing",
-      type: "observation",
-      kind: "list",
-      projectId,
-    },
-    preferredClickhouseService: "ReadOnly",
+  return getObservationsForTraceFromEventsTable({
+    traceId,
+    projectId,
+    selectIOAndMetadata: !omitLargeFields,
+    selectToolData: !omitLargeFields,
   });
-
-  let payloadSize = 0;
-
-  for (const record of records) {
-    for (const key of ["input", "output"] as const) {
-      const value = record[key];
-
-      if (value && typeof value === "string") {
-        payloadSize += value.length;
-      }
-    }
-
-    payloadSize += getMetadataPayloadSize(record.metadata ?? {});
-
-    if (payloadSize >= env.LANGFUSE_API_TRACE_OBSERVATIONS_SIZE_LIMIT_BYTES) {
-      throw new TraceObservationsTooLargeError(
-        payloadSize,
-        env.LANGFUSE_API_TRACE_OBSERVATIONS_SIZE_LIMIT_BYTES,
-      );
-    }
-  }
-
-  return records;
 };
 
 const getObservationRecordCountForTrace = async (params: {
   traceId: string;
   projectId: string;
-  timestamp: Date;
 }) => {
-  const { traceId, projectId, timestamp } = params;
-  const skipDedup = await shouldSkipObservationsFinal(projectId);
+  const { traceId, projectId } = params;
 
-  const countExpression = skipDedup ? "count()" : "uniqExact(id)";
-  const records = await queryClickhouse<{ count: string }>({
-    query: `
-      SELECT ${countExpression} AS count
-      FROM observations
-      WHERE trace_id = {traceId: String}
-      AND project_id = {projectId: String}
-      AND start_time >= {traceTimestamp: DateTime64(3)} - ${TRACE_TO_OBSERVATIONS_INTERVAL}
-      AND is_deleted = 0
-    `,
-    params: {
-      traceId,
-      projectId,
-      traceTimestamp: convertDateToClickhouseDateTime(timestamp),
-    },
-    tags: {
-      feature: "tracing",
-      type: "observation",
-      kind: "count",
-      projectId,
-    },
-    preferredClickhouseService: "ReadOnly",
+  return getObservationsCountFromEventsTable({
+    projectId,
+    filter: [
+      { type: "string", operator: "=", column: "traceId", value: traceId },
+    ],
   });
-
-  return Number(records[0]?.count ?? 0);
 };
 
 async function getAuthorizedTrace(params: {
@@ -363,34 +230,30 @@ export async function buildTraceExport({
   const observationRecordCount = await getObservationRecordCountForTrace({
     traceId,
     projectId,
-    timestamp: trace.timestamp,
   });
   const omitLargeFields =
     observationRecordCount >= TRACE_DOWNLOAD_OMIT_LARGE_FIELDS_THRESHOLD;
 
-  let observationRecords: ObservationRecordReadType[];
+  let observationRecords: FullEventsObservation[] = [];
   try {
-    observationRecords = await getObservationRecordsForTrace({
-      traceId,
-      projectId,
-      timestamp: trace.timestamp,
-      omitLargeFields,
-    });
+    observationRecords = (
+      await getObservationRecordsForTrace({
+        traceId,
+        projectId,
+        omitLargeFields,
+      })
+    ).observations;
   } catch (error) {
-    if (error instanceof TraceObservationsTooLargeError) {
-      throw new TraceDownloadTooLargeError(error.message);
-    }
-
     throw error;
   }
 
-  const scores = await getScoresAndCorrectionsForTraces({
+  const scoreRecords = await getScoresAndCorrectionsForTraces({
     projectId,
     traceIds: [traceId],
     timestamp: trace.timestamp,
   });
 
-  const serializedScores = toDomainArrayWithStringifiedMetadata(scores).map(
+  const scores = toDomainArrayWithStringifiedMetadata(scoreRecords).map(
     (score) => ({
       ...score,
       stringValue: score.stringValue ?? null,
@@ -402,69 +265,62 @@ export async function buildTraceExport({
   );
 
   const observations = observationRecords.map((record) => {
-    const startTime = clickhouseDateTimeToIso(record.start_time);
-    const endTime = clickhouseDateTimeToIso(record.end_time);
-    const completionStartTime = clickhouseDateTimeToIso(
-      record.completion_start_time,
-    );
-
     return {
       id: record.id,
-      traceId: record.trace_id ?? traceId,
+      traceId: record.traceId ?? traceId,
       userId: trace.userId ?? "",
       sessionId: trace.sessionId ?? "",
-      projectId: record.project_id,
-      startTime: startTime ?? "",
-      endTime,
-      parentObservationId: record.parent_observation_id ?? null,
+      projectId: record.projectId,
+      startTime: record.startTime.toISOString(),
+      endTime: record.endTime?.toISOString() ?? null,
+      parentObservationId: record.parentObservationId ?? null,
       type: record.type,
       environment: record.environment,
       name: record.name ?? null,
       level: record.level ?? null,
       traceName: trace.name ?? "",
-      statusMessage: record.status_message ?? null,
+      statusMessage: record.statusMessage ?? null,
       version: record.version ?? null,
-      createdAt: clickhouseDateTimeToIso(record.created_at) ?? "",
-      updatedAt: clickhouseDateTimeToIso(record.updated_at) ?? "",
-      model: record.provided_model_name ?? null,
-      internalModelId: record.internal_model_id ?? null,
-      modelParameters: record.model_parameters ?? null,
-      completionStartTime,
-      promptId: record.prompt_id ?? null,
-      promptName: record.prompt_name ?? null,
-      promptVersion: record.prompt_version ?? null,
-      providedUsageDetails: convertNumericRecord(
-        record.provided_usage_details ?? {},
+      createdAt: record.createdAt.toISOString(),
+      updatedAt: record.updatedAt.toISOString(),
+      model: record.model ?? null,
+      modelParameters: record.modelParameters
+        ? JSON.stringify(record.modelParameters)
+        : null,
+      internalModelId: record.internalModelId ?? null,
+      completionStartTime: record.completionStartTime?.toISOString() ?? null,
+      promptId: record.promptId ?? null,
+      promptName: record.promptName ?? null,
+      promptVersion: record.promptVersion ?? null,
+      providedUsageDetails: record.providedUsageDetails,
+      latency: getDurationSeconds(record.startTime, record.endTime),
+      timeToFirstToken: getDurationSeconds(
+        record.startTime,
+        record.completionStartTime,
       ),
-      latency: getDurationSeconds(startTime, endTime),
-      timeToFirstToken: getDurationSeconds(startTime, completionStartTime),
-      usageDetails: convertNumericRecord(record.usage_details ?? {}),
-      costDetails: convertNumericRecord(record.cost_details ?? {}),
-      providedCostDetails: convertNumericRecord(
-        record.provided_cost_details ?? {},
-      ),
-      usagePricingTierId: record.usage_pricing_tier_id ?? null,
-      usagePricingTierName: record.usage_pricing_tier_name ?? null,
-      toolCallNames: record.tool_call_names ?? [],
+      usageDetails: record.usageDetails,
+      costDetails: record.costDetails,
+      providedCostDetails: record.providedCostDetails,
+      usagePricingTierId: record.usagePricingTierId ?? null,
+      usagePricingTierName: record.usagePricingTierName ?? null,
+      toolCallNames: record.toolCallNames ?? [],
       tags: trace.tags,
       bookmarked: trace.bookmarked,
       public: trace.public,
       ...(!omitLargeFields
         ? {
-            toolDefinitions: record.tool_definitions ?? {},
-            toolCalls: record.tool_calls ?? [],
-            input: record.input ?? null,
-            output: record.output ?? null,
-            metadata: JSON.stringify(
-              parseMetadataCHRecordToDomain(record.metadata ?? {}),
-            ),
+            toolDefinitions: record.toolDefinitions ?? {},
+            toolCalls: record.toolCalls ?? [],
+            input: record.input ? JSON.stringify(record.input) : null,
+            output: record.output ? JSON.stringify(record.output) : null,
+            metadata: JSON.stringify(record.metadata ?? {}),
           }
         : {}),
     };
   });
 
   return {
-    scores: serializedScores,
     observations,
+    scores,
   };
 }

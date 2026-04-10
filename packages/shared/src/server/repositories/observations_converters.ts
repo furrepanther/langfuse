@@ -264,6 +264,9 @@ export function convertObservationPartial(
       outputCost: reducedCostDetails.output,
       totalCost: reducedCostDetails.total,
     }),
+    ...(record.provided_usage_details !== undefined && {
+      providedUsageDetails: convertNumericRecord(record.provided_usage_details),
+    }),
     ...(record.provided_cost_details !== undefined && {
       providedCostDetails: convertNumericRecord(record.provided_cost_details),
     }),
@@ -354,6 +357,7 @@ export function convertObservationPartial(
     promptVersion: partial.promptVersion ?? null,
     latency: partial.latency ?? null,
     timeToFirstToken: partial.timeToFirstToken ?? null,
+    providedUsageDetails: partial.providedUsageDetails ?? {},
     usageDetails: partial.usageDetails ?? {},
     costDetails: partial.costDetails ?? {},
     providedCostDetails: partial.providedCostDetails ?? {},

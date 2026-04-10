@@ -1,32 +1,26 @@
 import { LangfuseNotFoundError, UnauthorizedError } from "@langfuse/shared";
 import {
   buildTraceExport,
-  TraceDownloadTooLargeError,
   type TraceExportSession,
 } from "@/src/features/traces/server/buildTraceExport";
-import { TraceObservationsTooLargeError } from "@langfuse/shared/src/server";
 
 const mockGetTraceById = jest.fn();
-const mockQueryClickhouse = jest.fn();
-const mockShouldSkipObservationsFinal = jest.fn();
+const mockGetObservationsCountFromEventsTable = jest.fn();
+const mockGetObservationsForTraceFromEventsTable = jest.fn();
 const mockGetScoresAndCorrectionsForTraces = jest.fn();
 const mockTraceSessionFindFirst = jest.fn();
 const mockSendAdminAccessWebhook = jest.fn();
 
-jest.mock("@langfuse/shared/src/server", () => {
-  class MockTraceObservationsTooLargeError extends Error {}
-
-  return {
-    ...jest.requireActual("@langfuse/shared/src/server"),
-    TraceObservationsTooLargeError: MockTraceObservationsTooLargeError,
-    getTraceById: (...args: unknown[]) => mockGetTraceById(...args),
-    queryClickhouse: (...args: unknown[]) => mockQueryClickhouse(...args),
-    shouldSkipObservationsFinal: (...args: unknown[]) =>
-      mockShouldSkipObservationsFinal(...args),
-    getScoresAndCorrectionsForTraces: (...args: unknown[]) =>
-      mockGetScoresAndCorrectionsForTraces(...args),
-  };
-});
+jest.mock("@langfuse/shared/src/server", () => ({
+  ...jest.requireActual("@langfuse/shared/src/server"),
+  getTraceById: (...args: unknown[]) => mockGetTraceById(...args),
+  getObservationsCountFromEventsTable: (...args: unknown[]) =>
+    mockGetObservationsCountFromEventsTable(...args),
+  getObservationsForTraceFromEventsTable: (...args: unknown[]) =>
+    mockGetObservationsForTraceFromEventsTable(...args),
+  getScoresAndCorrectionsForTraces: (...args: unknown[]) =>
+    mockGetScoresAndCorrectionsForTraces(...args),
+}));
 
 jest.mock("@langfuse/shared/src/db", () => ({
   prisma: {
@@ -47,17 +41,18 @@ const traceId = "trace-1";
 const makeSession = (overrides?: {
   admin?: boolean;
   projects?: Array<{ id: string }>;
-}): TraceExportSession => ({
-  user: {
-    email: "test@example.com",
-    admin: overrides?.admin ?? false,
-    organizations: [
-      {
-        projects: overrides?.projects ?? [{ id: projectId }],
-      },
-    ],
-  },
-});
+}): TraceExportSession =>
+  ({
+    user: {
+      email: "test@example.com",
+      admin: overrides?.admin ?? false,
+      organizations: [
+        {
+          projects: overrides?.projects ?? [{ id: projectId }],
+        },
+      ],
+    },
+  }) as any;
 
 const trace = {
   id: traceId,
@@ -79,44 +74,44 @@ const trace = {
   projectId,
 };
 
-const observation = {
+const observationRecord = {
   id: "obs-1",
-  trace_id: traceId,
-  project_id: projectId,
+  traceId,
+  projectId,
+  userId: null,
+  sessionId: null,
   environment: "default",
   type: "SPAN",
-  start_time: "2024-01-01 00:00:01.000",
-  end_time: "2024-01-01 00:00:02.000",
+  startTime: new Date("2024-01-01T00:00:01.000Z"),
+  endTime: new Date("2024-01-01T00:00:02.000Z"),
   name: "Observation 1",
   metadata: { key: "value" },
-  parent_observation_id: null,
+  parentObservationId: null,
   level: "DEFAULT",
-  status_message: null,
+  statusMessage: null,
   version: null,
-  created_at: "2024-01-01 00:00:01.000",
-  updated_at: "2024-01-01 00:00:02.000",
-  provided_model_name: null,
-  internal_model_id: null,
-  model_parameters: null,
+  createdAt: new Date("2024-01-01T00:00:01.000Z"),
+  updatedAt: new Date("2024-01-01T00:00:02.000Z"),
+  model: null,
+  internalModelId: null,
+  modelParameters: null,
   input: '{"input":"secret"}',
   output: '{"output":"secret"}',
-  completion_start_time: null,
-  prompt_id: null,
-  prompt_name: null,
-  prompt_version: null,
-  usage_details: { input: "90", output: "45", total: "135" },
-  cost_details: { total: "1.23" },
-  provided_cost_details: { total: "1.5" },
-  provided_usage_details: { input: "100", output: "50", total: "150" },
-  total_cost: null,
-  usage_pricing_tier_id: null,
-  usage_pricing_tier_name: null,
-  tool_definitions: null,
-  tool_calls: null,
-  tool_call_names: null,
-  event_ts: "2024-01-01 00:00:02.000",
-  is_deleted: 0,
-};
+  completionStartTime: null,
+  promptId: null,
+  promptName: null,
+  promptVersion: null,
+  usageDetails: { input: 90, output: 45, total: 135 },
+  costDetails: { total: 1.23 },
+  providedCostDetails: { total: 1.5 },
+  providedUsageDetails: { input: 100, output: 50, total: 150 },
+  totalCost: null,
+  usagePricingTierId: null,
+  usagePricingTierName: null,
+  toolDefinitions: null,
+  toolCalls: null,
+  toolCallNames: null,
+} as any;
 
 const score = {
   id: "score-1",
@@ -147,10 +142,11 @@ describe("buildTraceExport", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetTraceById.mockResolvedValue(trace);
-    mockQueryClickhouse
-      .mockResolvedValueOnce([{ count: 1 }])
-      .mockResolvedValueOnce([observation]);
-    mockShouldSkipObservationsFinal.mockResolvedValue(false);
+    mockGetObservationsCountFromEventsTable.mockResolvedValue(1);
+    mockGetObservationsForTraceFromEventsTable.mockResolvedValue({
+      observations: [observationRecord],
+      totalCount: 1,
+    });
     mockGetScoresAndCorrectionsForTraces.mockResolvedValue([score]);
     mockTraceSessionFindFirst.mockResolvedValue(null);
   });
@@ -162,15 +158,19 @@ describe("buildTraceExport", () => {
       session: makeSession(),
     });
 
-    expect(mockQueryClickhouse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        query: expect.stringContaining("AND is_deleted = 0"),
-        params: expect.objectContaining({
-          traceId,
-          projectId,
-        }),
-      }),
-    );
+    expect(mockGetObservationsCountFromEventsTable).toHaveBeenCalledWith({
+      projectId,
+      filter: [
+        { type: "string", operator: "=", column: "traceId", value: traceId },
+      ],
+    });
+    expect(mockGetObservationsForTraceFromEventsTable).toHaveBeenCalledWith({
+      traceId,
+      projectId,
+      selectIOAndMetadata: true,
+      selectToolData: true,
+    });
+    expect(mockGetObservationsForTraceFromEventsTable).toHaveBeenCalledTimes(1);
     expect(mockGetScoresAndCorrectionsForTraces).toHaveBeenCalledWith({
       projectId,
       traceIds: [traceId],
@@ -214,25 +214,26 @@ describe("buildTraceExport", () => {
   });
 
   it("preserves parent observation ids in the raw export shape", async () => {
-    mockQueryClickhouse
-      .mockReset()
-      .mockResolvedValueOnce([{ count: 3 }])
-      .mockResolvedValueOnce([
-        observation,
+    mockGetObservationsCountFromEventsTable.mockResolvedValue(3);
+    mockGetObservationsForTraceFromEventsTable.mockResolvedValue({
+      observations: [
+        observationRecord,
         {
-          ...observation,
+          ...observationRecord,
           id: "obs-2",
           name: "Observation 2",
-          parent_observation_id: "obs-1",
+          parentObservationId: "obs-1",
         },
         {
-          ...observation,
+          ...observationRecord,
           id: "obs-3",
           name: null,
           type: "GENERATION",
-          parent_observation_id: "obs-2",
+          parentObservationId: "obs-2",
         },
-      ]);
+      ],
+      totalCount: 3,
+    });
 
     const result = await buildTraceExport({
       traceId,
@@ -252,15 +253,14 @@ describe("buildTraceExport", () => {
   });
 
   it("omits IO, metadata, toolDefinitions, and toolCalls for large trace exports", async () => {
-    mockQueryClickhouse
-      .mockReset()
-      .mockResolvedValueOnce([{ count: 350 }])
-      .mockResolvedValueOnce(
-        Array.from({ length: 350 }, (_, idx) => ({
-          ...observation,
-          id: `obs-${idx + 1}`,
-        })),
-      );
+    mockGetObservationsCountFromEventsTable.mockResolvedValue(350);
+    mockGetObservationsForTraceFromEventsTable.mockResolvedValue({
+      observations: Array.from({ length: 350 }, (_, idx) => ({
+        ...observationRecord,
+        id: `obs-${idx + 1}`,
+      })),
+      totalCount: 350,
+    });
 
     const result = await buildTraceExport({
       traceId,
@@ -268,6 +268,12 @@ describe("buildTraceExport", () => {
       session: makeSession(),
     });
 
+    expect(mockGetObservationsForTraceFromEventsTable).toHaveBeenCalledWith({
+      traceId,
+      projectId,
+      selectIOAndMetadata: false,
+      selectToolData: false,
+    });
     expect(result.observations).toHaveLength(350);
     expect(result.observations[0]).not.toHaveProperty("input");
     expect(result.observations[0]).not.toHaveProperty("output");
@@ -291,11 +297,6 @@ describe("buildTraceExport", () => {
         }),
       ]),
     );
-    expect(mockQueryClickhouse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        query: expect.stringContaining("AND is_deleted = 0"),
-      }),
-    );
   });
 
   it("throws a not-found error when the trace is missing", async () => {
@@ -318,27 +319,6 @@ describe("buildTraceExport", () => {
         session: makeSession({ projects: [{ id: "other-project" }] }),
       }),
     ).rejects.toBeInstanceOf(UnauthorizedError);
-  });
-
-  it("converts full-export size-limit failures into a client-safe error", async () => {
-    const tooLargeError = new Error("Observations in trace are too large");
-    Object.setPrototypeOf(
-      tooLargeError,
-      TraceObservationsTooLargeError.prototype,
-    );
-
-    mockQueryClickhouse
-      .mockReset()
-      .mockResolvedValueOnce([{ count: 1 }])
-      .mockRejectedValueOnce(tooLargeError);
-
-    await expect(
-      buildTraceExport({
-        traceId,
-        projectId,
-        session: makeSession(),
-      }),
-    ).rejects.toBeInstanceOf(TraceDownloadTooLargeError);
   });
 
   it("notifies on admin access", async () => {
