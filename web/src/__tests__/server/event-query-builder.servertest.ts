@@ -124,7 +124,7 @@ describe("CTEQueryBuilder", () => {
 });
 
 describe("EventsQueryBuilder", () => {
-  it("should allow list queries to omit tool payload columns", () => {
+  it("should allow list queries to omit heavy tool payload columns while keeping tool call names", () => {
     const slimQuery = new EventsQueryBuilder({
       projectId: "test-project",
     })
@@ -139,7 +139,7 @@ describe("EventsQueryBuilder", () => {
 
     expect(slimQuery).not.toContain('e.tool_definitions as "tool_definitions"');
     expect(slimQuery).not.toContain('e.tool_calls as "tool_calls"');
-    expect(slimQuery).not.toContain('e.tool_call_names as "tool_call_names"');
+    expect(slimQuery).toContain('e.tool_call_names as "tool_call_names"');
 
     expect(defaultQuery).toContain('e.tool_definitions as "tool_definitions"');
     expect(defaultQuery).toContain('e.tool_calls as "tool_calls"');

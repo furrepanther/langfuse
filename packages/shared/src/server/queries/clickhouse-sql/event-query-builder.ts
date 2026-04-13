@@ -217,6 +217,8 @@ const FIELD_SETS = {
     "userId",
     "sessionId",
     "traceName",
+    // Keep lightweight tool names available even when heavy tool payloads are omitted.
+    "toolCallNames",
   ],
   calculated: ["latency", "timeToFirstToken"],
   io: ["input", "output"],

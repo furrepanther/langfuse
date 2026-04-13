@@ -211,6 +211,7 @@ describe("buildTraceExport", () => {
       observations: Array.from({ length: 350 }, (_, idx) => ({
         ...makeObservation(),
         id: `obs-${idx + 1}`,
+        toolCallNames: ["read_file", "write_file"],
       })),
       totalCount: 350,
     });
@@ -233,7 +234,10 @@ describe("buildTraceExport", () => {
     expect(result.observations[0]).not.toHaveProperty("metadata");
     expect(result.observations[0]).not.toHaveProperty("toolDefinitions");
     expect(result.observations[0]).not.toHaveProperty("toolCalls");
-    expect(result.observations[0]).toHaveProperty("toolCallNames");
+    expect(result.observations[0]).toHaveProperty("toolCallNames", [
+      "read_file",
+      "write_file",
+    ]);
   });
 
   it("reemits the observation payload limit error as a download-safe error", async () => {
