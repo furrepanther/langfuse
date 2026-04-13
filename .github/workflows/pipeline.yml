@@ -144,8 +144,8 @@ jobs:
         if: github.repository == 'langfuse/langfuse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
-          password: ${{ secrets.DOCKERHUB_TOKEN_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
+          username: ${{ secrets.DOCKERHUB_USERNAME_READ }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_READ }}
       - name: Set NEXT_PUBLIC_BUILD_ID
         run: echo "NEXT_PUBLIC_BUILD_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build images
@@ -222,8 +222,8 @@ jobs:
         if: github.repository == 'langfuse/langfuse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
-          password: ${{ secrets.DOCKERHUB_TOKEN_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
+          username: ${{ secrets.DOCKERHUB_USERNAME_READ }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_READ }}
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 # zizmor: ignore[cache-poisoning] test job dependency cache only; no released artifacts are built or published from this cached state
         with:
@@ -332,8 +332,8 @@ jobs:
         if: github.repository == 'langfuse/langfuse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
-          password: ${{ secrets.DOCKERHUB_TOKEN_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
+          username: ${{ secrets.DOCKERHUB_USERNAME_READ }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_READ }}
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 # zizmor: ignore[cache-poisoning] worker test dependency cache only; no release artifacts are produced from this cache
         with:
@@ -405,8 +405,8 @@ jobs:
         if: github.repository == 'langfuse/langfuse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
-          password: ${{ secrets.DOCKERHUB_TOKEN_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
+          username: ${{ secrets.DOCKERHUB_USERNAME_READ }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_READ }}
       - name: Use Node.js 24
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 # zizmor: ignore[cache-poisoning] llm-connection test dependency cache only; privileged secrets are used here, but this cache is not consumed by artifact publishing
         with:
@@ -450,16 +450,16 @@ jobs:
       - name: run llm connection tests
         run: pnpm --filter=worker run test:llm-connections-only
         env:
-          LANGFUSE_LLM_CONNECTION_OPENAI_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_OPENAI_KEY }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_ANTHROPIC_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_ANTHROPIC_KEY }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_AZURE_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_AZURE_KEY }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_AZURE_BASE_URL: ${{ secrets.LANGFUSE_LLM_CONNECTION_AZURE_BASE_URL }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_AZURE_MODEL: ${{ secrets.LANGFUSE_LLM_CONNECTION_AZURE_MODEL }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_BEDROCK_ACCESS_KEY_ID: ${{ secrets.LANGFUSE_LLM_CONNECTION_BEDROCK_ACCESS_KEY_ID }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_BEDROCK_SECRET_ACCESS_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_BEDROCK_SECRET_ACCESS_KEY }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_BEDROCK_REGION: ${{ secrets.LANGFUSE_LLM_CONNECTION_BEDROCK_REGION }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_VERTEXAI_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_VERTEXAI_KEY }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
-          LANGFUSE_LLM_CONNECTION_GOOGLEAISTUDIO_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_GOOGLEAISTUDIO_KEY }} # zizmor: ignore[secrets-outside-env] shared CI integration-test credential set kept together for one multi-provider test job
+          LANGFUSE_LLM_CONNECTION_OPENAI_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_OPENAI_KEY }}
+          LANGFUSE_LLM_CONNECTION_ANTHROPIC_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_ANTHROPIC_KEY }}
+          LANGFUSE_LLM_CONNECTION_AZURE_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_AZURE_KEY }}
+          LANGFUSE_LLM_CONNECTION_AZURE_BASE_URL: ${{ secrets.LANGFUSE_LLM_CONNECTION_AZURE_BASE_URL }}
+          LANGFUSE_LLM_CONNECTION_AZURE_MODEL: ${{ secrets.LANGFUSE_LLM_CONNECTION_AZURE_MODEL }}
+          LANGFUSE_LLM_CONNECTION_BEDROCK_ACCESS_KEY_ID: ${{ secrets.LANGFUSE_LLM_CONNECTION_BEDROCK_ACCESS_KEY_ID }}
+          LANGFUSE_LLM_CONNECTION_BEDROCK_SECRET_ACCESS_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_BEDROCK_SECRET_ACCESS_KEY }}
+          LANGFUSE_LLM_CONNECTION_BEDROCK_REGION: ${{ secrets.LANGFUSE_LLM_CONNECTION_BEDROCK_REGION }}
+          LANGFUSE_LLM_CONNECTION_VERTEXAI_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_VERTEXAI_KEY }}
+          LANGFUSE_LLM_CONNECTION_GOOGLEAISTUDIO_KEY: ${{ secrets.LANGFUSE_LLM_CONNECTION_GOOGLEAISTUDIO_KEY }}
 
   e2e-tests:
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -482,8 +482,8 @@ jobs:
         if: github.repository == 'langfuse/langfuse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
-          password: ${{ secrets.DOCKERHUB_TOKEN_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
+          username: ${{ secrets.DOCKERHUB_USERNAME_READ }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_READ }}
       - name: Setup Turbo cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 # zizmor: ignore[cache-poisoning] e2e cache only; no published artifact path restores this cache
         with:
@@ -553,8 +553,8 @@ jobs:
         if: github.repository == 'langfuse/langfuse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
-          password: ${{ secrets.DOCKERHUB_TOKEN_READ }} # zizmor: ignore[secrets-outside-env] shared read-only CI credential used across multiple test jobs; not scoped to a dedicated deployment boundary
+          username: ${{ secrets.DOCKERHUB_USERNAME_READ }}
+          password: ${{ secrets.DOCKERHUB_TOKEN_READ }}
       - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3
         with:
           version: 10.33.0
@@ -647,7 +647,7 @@ jobs:
           status: ${{ job.status }}
           notify_when: "failure"
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # zizmor: ignore[secrets-outside-env] shared notification secret for CI failure reporting rather than an environment-specific deployment secret
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       - name: Output job results
         run: |
           echo "Job results: ${STEPS_SET_SUCCESS_OUTPUT_OUTPUTS_SUCCESS}"
@@ -874,4 +874,4 @@ jobs:
           status: ${{ job.status }}
           notify_when: "failure"
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }} # zizmor: ignore[secrets-outside-env] shared notification secret for CI failure reporting rather than an environment-specific deployment secret
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
