@@ -1,6 +1,7 @@
 import {
   BaseError,
   LangfuseNotFoundError,
+  ScoreDataTypeEnum,
   UnauthorizedError,
 } from "@langfuse/shared";
 import {
@@ -207,12 +208,28 @@ export async function buildTraceExport({
   });
 
   const scores = scoreRecords.map((score) => ({
-    ...score,
-    stringValue: score.stringValue ?? null,
+    id: score.id,
+    projectId: score.projectId,
+    environment: score.environment,
+    name: score.name,
+    value: score.value,
+    source: score.source,
+    authorUserId: score.authorUserId,
+    comment: score.comment,
     metadata: score.metadata ?? null,
+    configId: score.configId,
     createdAt: score.createdAt.toISOString(),
     updatedAt: score.updatedAt.toISOString(),
     timestamp: score.timestamp.toISOString(),
+    traceId: score.traceId,
+    sessionId: score.sessionId,
+    datasetRunId: score.datasetRunId,
+    observationId: score.observationId,
+    stringValue:
+      score.dataType === ScoreDataTypeEnum.CORRECTION
+        ? score.longStringValue
+        : (score.stringValue ?? null),
+    dataType: score.dataType,
   }));
 
   const observations = observationRecords.map((record) => {

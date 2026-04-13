@@ -190,8 +190,18 @@ describe("buildTraceExport", () => {
       traceIds: [traceId],
       timestamp: makeTrace().timestamp,
     });
+    expect(result.scores[0]).not.toHaveProperty("longStringValue");
+    expect(result.scores[0]).not.toHaveProperty("queueId");
+    expect(result.scores[0]).not.toHaveProperty("executionTraceId");
     expect(result).toMatchObject({
-      scores: [expect.objectContaining({ id: "score-1", traceId })],
+      scores: [
+        expect.objectContaining({
+          id: "score-1",
+          traceId,
+          stringValue: null,
+          dataType: "NUMERIC",
+        }),
+      ],
       observations: [
         expect.objectContaining({
           id: "obs-1",
@@ -203,6 +213,37 @@ describe("buildTraceExport", () => {
         }),
       ],
     });
+  });
+
+  it("maps correction score text into stringValue without leaking internal fields", async () => {
+    mockGetScoresAndCorrectionsForTraces.mockResolvedValue([
+      makeScore({
+        dataType: "CORRECTION",
+        value: 0,
+        stringValue: null,
+        longStringValue: "corrected output",
+        queueId: "queue-1",
+        executionTraceId: "exec-1",
+      }),
+    ]);
+
+    const result = await buildTraceExport({
+      traceId,
+      projectId,
+      session: makeSession(),
+    });
+
+    expect(result.scores).toEqual([
+      expect.objectContaining({
+        id: "score-1",
+        traceId,
+        dataType: "CORRECTION",
+        stringValue: "corrected output",
+      }),
+    ]);
+    expect(result.scores[0]).not.toHaveProperty("longStringValue");
+    expect(result.scores[0]).not.toHaveProperty("queueId");
+    expect(result.scores[0]).not.toHaveProperty("executionTraceId");
   });
 
   it("omits IO, metadata, toolDefinitions, and toolCalls for large trace exports", async () => {
