@@ -139,18 +139,17 @@ export default function EvaluatorTable({ projectId }: { projectId: string }) {
   const queryFilter = useSidebarFilterState(
     evaluatorFilterConfig,
     newFilterOptions,
-    {
-      loading: false,
-      stateLocation: peekContext
-        ? [{ type: "peekContext", context: peekContext }]
-        : [
-            { type: "url" },
-            {
-              type: "sessionStorage",
-              sessionFilterContextId: projectId,
-            },
-          ],
-    },
+    peekContext
+      ? {
+          loading: false,
+          stateLocation: "peekContext",
+          context: peekContext,
+        }
+      : {
+          loading: false,
+          stateLocation: "urlAndSessionStorage",
+          sessionFilterContextId: projectId,
+        },
   );
 
   const { evaluators, rows, totalCount, hasLegacyEvals } =

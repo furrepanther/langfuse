@@ -282,11 +282,9 @@ export default function ExperimentItemsTable({
   const queryFilter = useSidebarFilterState(
     experimentItemsFilterConfig,
     {},
-    {
-      stateLocation: peekContext
-        ? [{ type: "peekContext", context: peekContext }]
-        : [{ type: "url" }],
-    },
+    peekContext
+      ? { stateLocation: "peekContext", context: peekContext }
+      : { stateLocation: "url" },
   );
 
   // Create ref-based wrapper to avoid stale closure when queryFilter updates

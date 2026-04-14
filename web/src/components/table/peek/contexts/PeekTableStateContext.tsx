@@ -4,6 +4,8 @@ import {
   useState,
   useMemo,
   type ReactNode,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import type { FilterState, OrderByState } from "@langfuse/shared";
 
@@ -16,7 +18,7 @@ export interface PeekTableState {
 
 export interface PeekTableStateContextValue {
   tableState: PeekTableState;
-  setTableState: (state: PeekTableState) => void;
+  setTableState: Dispatch<SetStateAction<PeekTableState>>;
 }
 
 const PeekTableStateContext = createContext<

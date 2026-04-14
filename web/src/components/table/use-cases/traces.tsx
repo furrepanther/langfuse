@@ -72,7 +72,10 @@ import {
 } from "@/src/components/ui/dropdown-menu";
 import { Button } from "@/src/components/ui/button";
 import TableIdOrName from "@/src/components/table/table-id";
-import { useSidebarFilterState } from "@/src/features/filters/hooks/useSidebarFilterState";
+import {
+  type UseSidebarFilterStateOptions,
+  useSidebarFilterState,
+} from "@/src/features/filters/hooks/useSidebarFilterState";
 import { traceFilterConfig } from "@/src/features/filters/config/traces-config";
 import { DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG } from "@/src/features/filters/constants/internal-environments";
 import { PeekViewTraceDetail } from "@/src/components/table/peek/peek-trace-detail";
@@ -330,24 +333,42 @@ export default function TracesTable({
     };
   }, [environmentFilterOptions.data, traceFilterOptionsResponse.data]);
 
-  const queryFilter = useSidebarFilterState(traceFilterConfig, filterOptions, {
-    loading:
-      traceFilterOptionsResponse.isPending ||
-      environmentFilterOptions.isPending,
-    stateLocation: peekContext
-      ? [{ type: "peekContext", context: peekContext }]
-      : hideControls
-        ? [{ type: "memory" }]
-        : [
-            { type: "url" },
-            {
-              type: "sessionStorage",
-              sessionFilterContextId: projectId,
-            },
-          ],
-    // Sidebar-only implicit environment defaults
-    implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
-  });
+  const isSidebarFilterLoading =
+    traceFilterOptionsResponse.isPending || environmentFilterOptions.isPending;
+
+  const queryFilterOptions: UseSidebarFilterStateOptions = useMemo(() => {
+    const baseOptions = {
+      loading: isSidebarFilterLoading,
+      implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
+    };
+
+    if (peekContext) {
+      return {
+        ...baseOptions,
+        stateLocation: "peekContext",
+        context: peekContext,
+      };
+    }
+
+    if (hideControls) {
+      return {
+        ...baseOptions,
+        stateLocation: "memory",
+      };
+    }
+
+    return {
+      ...baseOptions,
+      stateLocation: "urlAndSessionStorage",
+      sessionFilterContextId: projectId,
+    };
+  }, [hideControls, isSidebarFilterLoading, peekContext, projectId]);
+
+  const queryFilter = useSidebarFilterState(
+    traceFilterConfig,
+    filterOptions,
+    queryFilterOptions,
+  );
 
   const combinedFilterState = queryFilter.effectiveFilterState.concat(
     userIdFilter,

@@ -11,7 +11,10 @@ import { type LangfuseColumnDef } from "@/src/components/table/types";
 import { IOTableCell } from "../../ui/IOTableCell";
 import { Avatar, AvatarImage } from "@/src/components/ui/avatar";
 import useColumnVisibility from "@/src/features/column-visibility/hooks/useColumnVisibility";
-import { useSidebarFilterState } from "@/src/features/filters/hooks/useSidebarFilterState";
+import {
+  type UseSidebarFilterStateOptions,
+  useSidebarFilterState,
+} from "@/src/features/filters/hooks/useSidebarFilterState";
 import { usePeekTableState } from "@/src/components/table/peek/contexts/PeekTableStateContext";
 import {
   getScoreFilterConfig,
@@ -300,25 +303,41 @@ export default function ScoresTable({
     [filterOptions.data, environmentOptions],
   );
 
+  const isSidebarFilterLoading =
+    filterOptions.isPending || environmentFilterOptions.isPending;
+
+  const queryFilterOptions: UseSidebarFilterStateOptions = useMemo(() => {
+    const baseOptions = {
+      loading: isSidebarFilterLoading,
+      implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
+    };
+
+    if (peekContext) {
+      return {
+        ...baseOptions,
+        stateLocation: "peekContext",
+        context: peekContext,
+      };
+    }
+
+    if (disableUrlPersistence) {
+      return {
+        ...baseOptions,
+        stateLocation: "memory",
+      };
+    }
+
+    return {
+      ...baseOptions,
+      stateLocation: "urlAndSessionStorage",
+      sessionFilterContextId: projectId,
+    };
+  }, [disableUrlPersistence, isSidebarFilterLoading, peekContext, projectId]);
+
   const queryFilter = useSidebarFilterState(
     scoresFilterConfig,
     newFilterOptions,
-    {
-      loading: filterOptions.isPending || environmentFilterOptions.isPending,
-      stateLocation: peekContext
-        ? [{ type: "peekContext", context: peekContext }]
-        : disableUrlPersistence
-          ? [{ type: "memory" }]
-          : [
-              { type: "url" },
-              {
-                type: "sessionStorage",
-                sessionFilterContextId: projectId,
-              },
-            ],
-      // Sidebar-only implicit environment defaults
-      implicitDefaultConfig: DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG,
-    },
+    queryFilterOptions,
   );
 
   // Create ref-based wrapper to avoid stale closure when queryFilter updates
