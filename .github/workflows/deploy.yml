@@ -1,4 +1,7 @@
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -46,6 +49,9 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
+            if (context.eventName === "pull_request") {
+              return `["web"]`
+            }
             if (context.eventName === "workflow_dispatch") {
               if (context.payload.inputs.service === "all") {
                 return `["web", "web-ingestion", "web-iso", "worker", "worker-cpu"]`
@@ -76,6 +82,9 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
+            if (context.eventName === "pull_request") {
+              return `["staging"]`
+            }
             if (context.eventName === "workflow_dispatch") {
               return `["${context.payload.inputs.environment}"]`
             }
