@@ -624,12 +624,6 @@ export function useSidebarFilterState(
 
   // Mirror explicit URL filter state into session fallback storage.
   useEffect(() => {
-    if (
-      stateLocationType !== "url" &&
-      stateLocationType !== "urlAndSessionStorage"
-    ) {
-      return;
-    }
     if (stateLocationType !== "urlAndSessionStorage") return;
     if (pendingFiltersQuery !== null) return;
     if (typeof urlFiltersQuery !== "string") return;
