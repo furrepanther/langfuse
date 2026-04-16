@@ -1,16 +1,20 @@
 #!/bin/sh
 
 # Check whether a database URL's credentials contain characters that typically
-# need percent-encoding for Prisma (@ : / %).  Best-effort heuristic — strips
-# the scheme, isolates the user:password portion, and checks for common
-# offenders.  Strips %XX sequences first so partially-encoded values are caught.
+# need percent-encoding for Prisma (@ : / % # ?).  Best-effort heuristic —
+# strips the scheme, extracts the authority (user:pass@host) before the first
+# slash, and checks for common offenders.  Strips %XX sequences first so
+# partially-encoded values are caught.
 check_unencoded_credentials() {
     _url="$1"
     _no_scheme="${_url#*://}"
-    case "$_no_scheme" in
+    # Extract authority (before first /) so @/# in path or query params
+    # don't confuse credential parsing.
+    _authority="${_no_scheme%%/*}"
+    case "$_authority" in
         *@*)
-            _host_part="${_no_scheme##*@}"
-            _creds="${_no_scheme%@"$_host_part"}"
+            _host_part="${_authority##*@}"
+            _creds="${_authority%@"$_host_part"}"
             _user="${_creds%%:*}"
             _pass="${_creds#*:}"
             _found=""
@@ -19,11 +23,11 @@ check_unencoded_credentials() {
                 # partially-encoded values like p%40ss@word are still caught.
                 _stripped=$(printf '%s' "$_val" | sed 's/%[0-9A-Fa-f][0-9A-Fa-f]//g')
                 case "$_stripped" in
-                    *@*|*:*|*/*|*%*) _found="true" ;;
+                    *@*|*:*|*/*|*%*|*'#'*|*'?'*) _found="true" ;;
                 esac
             done
             if [ "$_found" = "true" ]; then
-                echo "HINT: Your DATABASE_URL credentials appear to contain special characters (@, :, /, %) that are not URL-encoded."
+                echo "HINT: Your DATABASE_URL / DIRECT_URL credentials appear to contain special characters (@, :, /, %, #, ?) that are not URL-encoded."
                 echo "  Prisma requires these to be percent-encoded, otherwise you will see P1013 errors."
                 echo "  Example: p@ssword → p%40ssword"
                 echo "  Reference: https://www.prisma.io/docs/orm/reference/connection-urls#special-characters"
