@@ -3193,3 +3193,135 @@ export const getSessionMetricsFromEvents = async (props: {
     total_observations: Number(row.total_observations),
   }));
 };
+
+/**
+ * SDK metadata detection result.
+ * isOtel is always present, other fields are optional (only when non-empty).
+ */
+export type SdkMetadata = {
+  isOtel: boolean;
+  name?: string;
+  version?: string;
+  language?: string;
+};
+
+/**
+ * Extract SDK info from metadata object.
+ * Handles both formats:
+ * - New (flat keys): `scope.name`, `scope.version`, `resourceAttributes.telemetry.sdk.language`
+ * - Old (nested): `scope: {name, version}`, `resourceAttributes: {"telemetry.sdk.language": ...}`
+ */
+function extractSdkInfoFromMetadata(metadata: Record<string, string>): {
+  name?: string;
+  version?: string;
+  language?: string;
+} {
+  try {
+    const scopeJson = metadata["scope"];
+    const resourceJson = metadata["resourceAttributes"];
+
+    const scope = scopeJson ? JSON.parse(scopeJson) : null;
+    const resource = resourceJson ? JSON.parse(resourceJson) : null;
+
+    const name = scope?.name;
+    const version = scope?.version;
+    const language = resource?.["telemetry.sdk.language"];
+
+    return {
+      ...(name && { name }),
+      ...(version && { version }),
+      ...(language && { language }),
+    };
+  } catch {
+    return {};
+  }
+}
+
+const resolveTimeFilter = () => {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const filter = new FilterList([
+    new DateTimeFilter({
+      clickhouseTable: "events_proto",
+      field: "start_time",
+      operator: ">=",
+      value: sevenDaysAgo,
+      tablePrefix: "e",
+    }),
+  ]);
+
+  return filter;
+};
+
+/**
+ * Detects SDK metadata from recent events (last 7 days).
+ *
+ * Detection priority:
+ * - v4+: Direct columns (scope_name, scope_version, telemetry_sdk_language)
+ * - v3: Nested JSON in metadata (`scope: {name, version}`)
+ * - v2 and older: No SDK metadata → returns isOtel: false
+ *
+ * Returns the most recent matching event's SDK info. Projects with no events
+ * in the past 7 days return isOtel: false (acceptable for inactive projects).
+ */
+export async function getSdkMetadataFromEvents(params: {
+  projectId: string;
+}): Promise<SdkMetadata> {
+  const { projectId } = params;
+
+  // Time filter: last 7 days
+  const filter = resolveTimeFilter();
+
+  const builder = new EventsQueryBuilder({ projectId })
+    .selectRaw("e.scope_name", "e.scope_version", "e.telemetry_sdk_language")
+    .selectFieldSet("metadata")
+    .applyFilters(filter)
+    // OR condition: v4 has scope_name column, v3 has scope in metadata
+    .where({
+      query: "e.scope_name != '' OR hasAny(e.metadata_names, ['scope'])",
+      params: {},
+    })
+    .orderByDefault()
+    .limit(1);
+
+  const { query, params: queryParams } = builder.buildWithParams();
+
+  const result = await queryClickhouse<{
+    scope_name: string;
+    scope_version: string;
+    telemetry_sdk_language: string;
+    metadata: Record<string, string>;
+  }>({
+    query,
+    params: queryParams,
+    tags: {
+      feature: "sdk-metadata-detection",
+      kind: "sdkMetadata",
+      projectId,
+    },
+  });
+
+  if (result.length === 0) {
+    return { isOtel: false };
+  }
+
+  const row = result[0];
+
+  // Prefer direct columns (v4), fall back to metadata (v3)
+  if (row.scope_name) {
+    return {
+      isOtel: true,
+      ...(row.scope_name && { name: row.scope_name }),
+      ...(row.scope_version && { version: row.scope_version }),
+      ...(row.telemetry_sdk_language && {
+        language: row.telemetry_sdk_language,
+      }),
+    };
+  }
+
+  // Fall back to metadata extraction for v3
+  const sdkInfo = extractSdkInfoFromMetadata(row.metadata ?? {});
+  return {
+    isOtel: Boolean(sdkInfo.name || sdkInfo.version || sdkInfo.language),
+    ...sdkInfo,
+  };
+}
