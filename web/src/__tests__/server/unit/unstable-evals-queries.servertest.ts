@@ -12,6 +12,7 @@ jest.mock("@langfuse/shared/src/db", () => {
       $queryRaw: jest.fn(),
       evalTemplate: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
       },
       jobConfiguration: {
         groupBy: jest.fn(),
@@ -23,11 +24,13 @@ jest.mock("@langfuse/shared/src/db", () => {
 import { prisma } from "@langfuse/shared/src/db";
 import {
   countContinuousEvaluationsForEvaluatorIds,
+  loadEvaluatorForContinuousEvaluation,
   listPublicEvaluatorTemplates,
 } from "@/src/features/evals/server/unstable-public-api/queries";
 
 const mockQueryRaw = prisma.$queryRaw as jest.Mock;
 const mockEvalTemplateFindMany = prisma.evalTemplate.findMany as jest.Mock;
+const mockEvalTemplateFindFirst = prisma.evalTemplate.findFirst as jest.Mock;
 const mockJobConfigurationGroupBy = prisma.jobConfiguration
   .groupBy as jest.Mock;
 
@@ -125,5 +128,43 @@ describe("unstable public eval queries", () => {
       tmpl_project_v2: 2,
       tmpl_managed_v7: 1,
     });
+  });
+
+  it("resolves continuous evaluation evaluator ids to the latest version in the same family", async () => {
+    mockEvalTemplateFindFirst
+      .mockResolvedValueOnce({
+        id: "tmpl_project_v1",
+        projectId: "project_123",
+        name: "Answer correctness",
+        version: 1,
+      })
+      .mockResolvedValueOnce({
+        id: "tmpl_project_v3",
+        projectId: "project_123",
+        name: "Answer correctness",
+        version: 3,
+      });
+
+    const result = await loadEvaluatorForContinuousEvaluation({
+      projectId: "project_123",
+      evaluatorId: "tmpl_project_v1",
+    });
+
+    expect(mockEvalTemplateFindFirst).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: "tmpl_project_v1",
+        OR: [{ projectId: "project_123" }, { projectId: null }],
+      },
+    });
+    expect(mockEvalTemplateFindFirst).toHaveBeenNthCalledWith(2, {
+      where: {
+        projectId: "project_123",
+        name: "Answer correctness",
+      },
+      orderBy: {
+        version: "desc",
+      },
+    });
+    expect(result.template.id).toBe("tmpl_project_v3");
   });
 });

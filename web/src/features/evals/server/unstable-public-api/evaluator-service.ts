@@ -70,21 +70,31 @@ export async function createPublicEvaluator(params: {
 
   try {
     const template = await prisma.$transaction(async (tx) => {
-      const latestProjectTemplate = await tx.evalTemplate.findFirst({
+      const existingProjectTemplates = await tx.evalTemplate.findMany({
         where: {
           projectId: params.projectId,
           name: params.input.name,
         },
-        orderBy: {
-          version: "desc",
-        },
+        orderBy: [
+          {
+            version: "desc",
+          },
+          {
+            createdAt: "desc",
+          },
+          {
+            id: "desc",
+          },
+        ],
         select: {
+          id: true,
           version: true,
         },
       });
       const modelConfig = toStoredModelConfig(params.input.modelConfig);
+      const latestProjectTemplate = existingProjectTemplates[0];
 
-      return tx.evalTemplate.create({
+      const template = await tx.evalTemplate.create({
         data: {
           projectId: params.projectId,
           name: params.input.name,
@@ -97,11 +107,35 @@ export async function createPublicEvaluator(params: {
           outputDefinition: params.input.outputDefinition,
         },
       });
+
+      if (existingProjectTemplates.length > 0) {
+        await tx.jobConfiguration.updateMany({
+          where: {
+            projectId: params.projectId,
+            evalTemplateId: {
+              in: existingProjectTemplates.map(
+                (existingTemplate) => existingTemplate.id,
+              ),
+            },
+          },
+          data: {
+            evalTemplateId: template.id,
+          },
+        });
+      }
+
+      return template;
     });
+
+    const continuousEvaluationCount =
+      await countContinuousEvaluationsForEvaluator({
+        projectId: params.projectId,
+        evaluatorId: template.id,
+      });
 
     return toApiEvaluator({
       template: template as StoredPublicEvaluatorTemplate,
-      continuousEvaluationCount: 0,
+      continuousEvaluationCount,
     });
   } catch (error) {
     if (

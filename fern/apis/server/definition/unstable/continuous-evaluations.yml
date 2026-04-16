@@ -19,6 +19,7 @@ service:
         Key rules:
         - `target` must be `observation` or `experiment`
         - `evaluatorId` must reference an existing evaluator returned by the evaluator endpoints
+        - Langfuse resolves `evaluatorId` to the latest version of that evaluator before saving the continuous evaluation
         - every evaluator prompt variable must be mapped exactly once
         - `expected_output` mappings are only valid for `target=experiment`
         - if `enabled=true`, Langfuse validates that the referenced evaluator can currently run
@@ -186,6 +187,7 @@ service:
 
         Important behavior:
         - provide only the fields you want to change
+        - if you provide `evaluatorId`, Langfuse resolves it to the latest version of that evaluator before saving
         - changing `target`, `filter`, or `mapping` must still produce a valid target-specific configuration
         - if the resulting config is enabled, Langfuse re-validates that the selected evaluator can run
       method: PATCH
@@ -247,7 +249,11 @@ types:
         docs: Human-readable deployment name. This is independent from the evaluator name.
       evaluatorId:
         type: string
-        docs: Identifier of the evaluator this rule uses.
+        docs: |
+          Identifier of the evaluator this rule uses.
+
+          Langfuse keeps the rule on the latest version of that evaluator.
+          If you create a newer project version with the same evaluator name later, existing continuous evaluations are moved to it automatically.
       target:
         type: commons.ContinuousEvaluationTarget
         docs: Target object type that should trigger scoring.
@@ -334,7 +340,10 @@ types:
         docs: Human-readable deployment name.
       evaluatorId:
         type: string
-        docs: Identifier of the evaluator to use.
+        docs: |
+          Identifier of the evaluator to use.
+
+          You can pass any version returned by the evaluator endpoints. Langfuse resolves it to the latest version before saving the rule.
       target:
         type: commons.ContinuousEvaluationTarget
         docs: Target object type to evaluate.
@@ -363,7 +372,10 @@ types:
         docs: Updated deployment name.
       evaluatorId:
         type: optional<string>
-        docs: Updated evaluator identifier.
+        docs: |
+          Updated evaluator identifier.
+
+          Langfuse resolves the provided evaluator to its latest version before saving the rule.
       target:
         type: optional<commons.ContinuousEvaluationTarget>
         docs: Updated target object type.

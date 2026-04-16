@@ -17,15 +17,12 @@ service:
         Naming behavior:
         - If this is a new evaluator name in your project, Langfuse creates version `1`.
         - If the name already exists in your project, Langfuse creates the next version and returns it.
+        - When a new project version is created, existing continuous evaluations in that project automatically move to the newest version for that evaluator name.
 
         Recommended workflow:
         1. Create the evaluator.
         2. Read the returned `variables` array.
         3. Create one or more continuous evaluations that reference the returned `id`.
-
-        Important behavior:
-        - Continuous evaluations keep using the evaluator you selected.
-        - If you later create a newer version, update the continuous evaluation to switch to it.
 
         Unstable API note:
         - This surface may evolve while the underlying evaluation data model is being redesigned.
@@ -162,6 +159,11 @@ types:
       - optional explicit model configuration
 
       It does not define **which** live objects are evaluated. That is the job of `continuous-evaluations`.
+
+      Versioning behavior:
+      - `GET /evaluators` returns the latest version of each available evaluator.
+      - `GET /evaluators/{id}` can return an older version.
+      - Continuous evaluations always run against the latest version for the selected evaluator name within the same source (`project` or `managed`).
     properties:
       id:
         type: string
@@ -198,7 +200,7 @@ types:
         docs: Explicit model configuration, or `null` when the project default evaluation model is used.
       continuousEvaluationCount:
         type: integer
-        docs: Number of continuous evaluations in the project that currently use this evaluator.
+        docs: Number of continuous evaluations in the project that currently use this evaluator version.
       createdAt:
         type: datetime
         docs: Timestamp when this evaluator was created.
@@ -218,6 +220,7 @@ types:
       Request body for creating an evaluator.
 
       If the same `name` already exists in your project, Langfuse creates the next version and returns it.
+      Existing continuous evaluations in the same project are then moved to that new latest version automatically.
     properties:
       name:
         type: string

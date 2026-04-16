@@ -1,7 +1,8 @@
 /** @jest-environment node */
 
 const mockEvalTemplateCreate = jest.fn();
-const mockEvalTemplateFindFirst = jest.fn();
+const mockEvalTemplateFindMany = jest.fn();
+const mockJobConfigurationUpdateMany = jest.fn();
 
 jest.mock(
   "../../../features/evals/server/unstable-public-api/validation",
@@ -141,6 +142,9 @@ const mockLoadEvaluatorForContinuousEvaluation = jest.mocked(
 const mockFindPublicContinuousEvaluationOrThrow = jest.mocked(
   queryModule.findPublicContinuousEvaluationOrThrow,
 );
+const mockCountContinuousEvaluationsForEvaluator = jest.mocked(
+  queryModule.countContinuousEvaluationsForEvaluator,
+);
 
 const createContinuousEvaluationRecord = (
   overrides?: Record<string, unknown>,
@@ -179,12 +183,16 @@ const createContinuousEvaluationRecord = (
 describe("unstable public eval services", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCountContinuousEvaluationsForEvaluator.mockResolvedValue(0);
 
     mockedPrisma.$transaction.mockImplementation(async (callback) =>
       callback({
         evalTemplate: {
           create: mockEvalTemplateCreate,
-          findFirst: mockEvalTemplateFindFirst,
+          findMany: mockEvalTemplateFindMany,
+        },
+        jobConfiguration: {
+          updateMany: mockJobConfigurationUpdateMany,
         },
       }),
     );
@@ -215,7 +223,7 @@ describe("unstable public eval services", () => {
   });
 
   it("creates a new project-owned evaluator family at version 1", async () => {
-    mockEvalTemplateFindFirst.mockResolvedValueOnce(null);
+    mockEvalTemplateFindMany.mockResolvedValueOnce([]);
     mockEvalTemplateCreate.mockResolvedValueOnce({
       ...projectTemplate,
       id: "tmpl_project_v1",
@@ -233,17 +241,26 @@ describe("unstable public eval services", () => {
       },
     });
 
-    expect(mockEvalTemplateFindFirst).toHaveBeenCalledWith({
+    expect(mockEvalTemplateFindMany).toHaveBeenCalledWith({
       where: {
         projectId: "project_123",
         name: "Answer correctness",
       },
-      orderBy: {
-        version: "desc",
-      },
       select: {
+        id: true,
         version: true,
       },
+      orderBy: [
+        {
+          version: "desc",
+        },
+        {
+          createdAt: "desc",
+        },
+        {
+          id: "desc",
+        },
+      ],
     });
     expect(mockEvalTemplateCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -252,6 +269,7 @@ describe("unstable public eval services", () => {
         version: 1,
       }),
     });
+    expect(mockJobConfigurationUpdateMany).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       id: "tmpl_project_v1",
       version: 1,
@@ -260,9 +278,17 @@ describe("unstable public eval services", () => {
   });
 
   it("creates a new evaluator version when the project name already exists", async () => {
-    mockEvalTemplateFindFirst.mockResolvedValueOnce({
-      version: 2,
-    });
+    mockCountContinuousEvaluationsForEvaluator.mockResolvedValueOnce(2);
+    mockEvalTemplateFindMany.mockResolvedValueOnce([
+      {
+        id: "tmpl_project_v2",
+        version: 2,
+      },
+      {
+        id: "tmpl_project_v1",
+        version: 1,
+      },
+    ]);
     mockEvalTemplateCreate.mockResolvedValueOnce({
       ...projectTemplate,
       id: "tmpl_project_v3",
@@ -285,10 +311,71 @@ describe("unstable public eval services", () => {
         version: 3,
       }),
     });
+    expect(mockJobConfigurationUpdateMany).toHaveBeenCalledWith({
+      where: {
+        projectId: "project_123",
+        evalTemplateId: {
+          in: ["tmpl_project_v2", "tmpl_project_v1"],
+        },
+      },
+      data: {
+        evalTemplateId: "tmpl_project_v3",
+      },
+    });
     expect(result).toMatchObject({
       id: "tmpl_project_v3",
       version: 3,
       scope: "project",
+      continuousEvaluationCount: 2,
+    });
+  });
+
+  it("resolves an older evaluator version to the latest version when creating a continuous evaluation", async () => {
+    mockLoadEvaluatorForContinuousEvaluation.mockResolvedValueOnce({
+      template: {
+        ...projectTemplate,
+        id: "tmpl_project_v3",
+        version: 3,
+      },
+    });
+    mockedPrisma.jobConfiguration.create.mockResolvedValueOnce(
+      createContinuousEvaluationRecord({
+        evalTemplateId: "tmpl_project_v3",
+        evalTemplate: {
+          id: "tmpl_project_v3",
+          projectId: "project_123",
+          name: "Answer correctness",
+          vars: ["input"],
+          prompt: "Judge {{input}}",
+        },
+      }),
+    );
+
+    const result = await createPublicContinuousEvaluation({
+      projectId: "project_123",
+      input: {
+        name: "answer_quality_latest",
+        evaluatorId: "tmpl_project_v1",
+        target: "observation",
+        enabled: true,
+        sampling: 1,
+        filter: [],
+        mapping: [{ variable: "input", source: "input" }],
+      },
+    });
+
+    expect(mockLoadEvaluatorForContinuousEvaluation).toHaveBeenCalledWith({
+      projectId: "project_123",
+      evaluatorId: "tmpl_project_v1",
+    });
+    expect(mockedPrisma.jobConfiguration.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        evalTemplateId: "tmpl_project_v3",
+      }),
+      include: expect.any(Object),
+    });
+    expect(result).toMatchObject({
+      evaluatorId: "tmpl_project_v3",
     });
   });
 

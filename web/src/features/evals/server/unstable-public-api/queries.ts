@@ -33,6 +33,33 @@ export async function findPublicEvaluatorTemplateOrThrow(params: {
   return template as StoredPublicEvaluatorTemplate;
 }
 
+export async function findLatestPublicEvaluatorTemplateInFamilyOrThrow(params: {
+  client?: PrismaClientLike;
+  projectId: string;
+  evaluatorId: string;
+}) {
+  const client = getPrismaClient(params.client);
+  const template = await findPublicEvaluatorTemplateOrThrow(params);
+
+  const latestTemplate = await client.evalTemplate.findFirst({
+    where: {
+      name: template.name,
+      projectId: template.projectId,
+    },
+    orderBy: {
+      version: "desc",
+    },
+  });
+
+  if (!latestTemplate) {
+    throw new LangfuseNotFoundError(
+      "Latest evaluator version not found within authorized project",
+    );
+  }
+
+  return latestTemplate as StoredPublicEvaluatorTemplate;
+}
+
 export async function countContinuousEvaluationsForEvaluator(params: {
   client?: PrismaClientLike;
   projectId: string;
@@ -213,7 +240,8 @@ export async function loadEvaluatorForContinuousEvaluation(params: {
   projectId: string;
   evaluatorId: string;
 }) {
-  const template = await findPublicEvaluatorTemplateOrThrow(params);
+  const template =
+    await findLatestPublicEvaluatorTemplateInFamilyOrThrow(params);
 
   return {
     template,

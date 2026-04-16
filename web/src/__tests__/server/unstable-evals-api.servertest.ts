@@ -213,6 +213,109 @@ describe("/api/public/unstable evaluators API", () => {
     ).toBe(false);
   });
 
+  it("automatically moves existing continuous evaluations to the newest project evaluator version", async () => {
+    const v1 = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Faithfulness",
+        prompt: "Judge {{input}} against {{output}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const created = await makeZodVerifiedAPICall(
+      PostUnstableContinuousEvaluationResponse,
+      "POST",
+      "/api/public/unstable/continuous-evaluations",
+      {
+        name: "faithfulness-live",
+        evaluatorId: v1.body.id,
+        target: "observation",
+        enabled: true,
+        sampling: 1,
+        filter: [],
+        mapping: [
+          { variable: "input", source: "input" },
+          { variable: "output", source: "output" },
+        ],
+      },
+      auth,
+    );
+
+    const v2 = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Faithfulness",
+        prompt: "Judge {{input}} versus {{output}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const fetched = await makeZodVerifiedAPICall(
+      GetUnstableContinuousEvaluationResponse,
+      "GET",
+      `/api/public/unstable/continuous-evaluations/${created.body.id}`,
+      undefined,
+      auth,
+    );
+
+    expect(v2.body.version).toBe(2);
+    expect(fetched.body.evaluatorId).toBe(v2.body.id);
+  });
+
+  it("resolves older project evaluator ids to the latest version when creating a continuous evaluation", async () => {
+    const v1 = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Answer groundedness",
+        prompt: "Judge {{input}} against {{output}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const v2 = await makeZodVerifiedAPICall(
+      PostUnstableEvaluatorResponse,
+      "POST",
+      "/api/public/unstable/evaluators",
+      {
+        name: "Answer groundedness",
+        prompt: "Judge {{input}} versus {{output}}",
+        outputDefinition: numericOutputDefinition,
+      },
+      auth,
+    );
+
+    const created = await makeZodVerifiedAPICall(
+      PostUnstableContinuousEvaluationResponse,
+      "POST",
+      "/api/public/unstable/continuous-evaluations",
+      {
+        name: "answer_groundedness_live",
+        evaluatorId: v1.body.id,
+        target: "observation",
+        enabled: true,
+        sampling: 1,
+        filter: [],
+        mapping: [
+          { variable: "input", source: "input" },
+          { variable: "output", source: "output" },
+        ],
+      },
+      auth,
+    );
+
+    expect(created.body.evaluatorId).toBe(v2.body.id);
+  });
+
   it("lists managed and project evaluator families separately when names overlap", async () => {
     const managed = await createManagedEvaluator({
       name: "Groundedness",

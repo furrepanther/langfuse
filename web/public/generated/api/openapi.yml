@@ -6116,6 +6116,9 @@ paths:
         - `evaluatorId` must reference an existing evaluator returned by the
         evaluator endpoints
 
+        - Langfuse resolves `evaluatorId` to the latest version of that
+        evaluator before saving the continuous evaluation
+
         - every evaluator prompt variable must be mapped exactly once
 
         - `expected_output` mappings are only valid for `target=experiment`
@@ -6432,6 +6435,9 @@ paths:
 
         - provide only the fields you want to change
 
+        - if you provide `evaluatorId`, Langfuse resolves it to the latest
+        version of that evaluator before saving
+
         - changing `target`, `filter`, or `mapping` must still produce a valid
         target-specific configuration
 
@@ -6587,6 +6593,10 @@ paths:
         - If the name already exists in your project, Langfuse creates the next
         version and returns it.
 
+        - When a new project version is created, existing continuous evaluations
+        in that project automatically move to the newest version for that
+        evaluator name.
+
 
         Recommended workflow:
 
@@ -6596,14 +6606,6 @@ paths:
 
         3. Create one or more continuous evaluations that reference the returned
         `id`.
-
-
-        Important behavior:
-
-        - Continuous evaluations keep using the evaluator you selected.
-
-        - If you later create a newer version, update the continuous evaluation
-        to switch to it.
 
 
         Unstable API note:
@@ -12444,7 +12446,15 @@ components:
           example: answer-correctness-live
         evaluatorId:
           type: string
-          description: Identifier of the evaluator this rule uses.
+          description: >-
+            Identifier of the evaluator this rule uses.
+
+
+            Langfuse keeps the rule on the latest version of that evaluator.
+
+            If you create a newer project version with the same evaluator name
+            later, existing continuous evaluations are moved to it
+            automatically.
           example: evaltmpl_123
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
@@ -12547,7 +12557,12 @@ components:
           example: answer-correctness-live
         evaluatorId:
           type: string
-          description: Identifier of the evaluator to use.
+          description: >-
+            Identifier of the evaluator to use.
+
+
+            You can pass any version returned by the evaluator endpoints.
+            Langfuse resolves it to the latest version before saving the rule.
           example: evaltmpl_123
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
@@ -12598,7 +12613,12 @@ components:
         evaluatorId:
           type: string
           nullable: true
-          description: Updated evaluator identifier.
+          description: >-
+            Updated evaluator identifier.
+
+
+            Langfuse resolves the provided evaluator to its latest version
+            before saving the rule.
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
           nullable: true
@@ -12844,6 +12864,17 @@ components:
 
         It does not define **which** live objects are evaluated. That is the job
         of `continuous-evaluations`.
+
+
+        Versioning behavior:
+
+        - `GET /evaluators` returns the latest version of each available
+        evaluator.
+
+        - `GET /evaluators/{id}` can return an older version.
+
+        - Continuous evaluations always run against the latest version for the
+        selected evaluator name within the same source (`project` or `managed`).
       properties:
         id:
           type: string
@@ -12907,7 +12938,7 @@ components:
           type: integer
           description: >-
             Number of continuous evaluations in the project that currently use
-            this evaluator.
+            this evaluator version.
           example: 0
         createdAt:
           type: string
@@ -12953,6 +12984,9 @@ components:
 
         If the same `name` already exists in your project, Langfuse creates the
         next version and returns it.
+
+        Existing continuous evaluations in the same project are then moved to
+        that new latest version automatically.
       properties:
         name:
           type: string
