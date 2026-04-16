@@ -3206,9 +3206,7 @@ export type SdkMetadata = {
 };
 
 /**
- * Extract SDK info from metadata object.
- * Handles both formats:
- * - New (flat keys): `scope.name`, `scope.version`, `resourceAttributes.telemetry.sdk.language`
+ * Extract SDK info from v3 metadata object.
  * - Old (nested): `scope: {name, version}`, `resourceAttributes: {"telemetry.sdk.language": ...}`
  */
 function extractSdkInfoFromMetadata(metadata: Record<string, string>): {
@@ -3237,21 +3235,6 @@ function extractSdkInfoFromMetadata(metadata: Record<string, string>): {
   }
 }
 
-const resolveTimeFilter = () => {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const filter = new FilterList([
-    new DateTimeFilter({
-      clickhouseTable: "events_proto",
-      field: "start_time",
-      operator: ">=",
-      value: sevenDaysAgo,
-      tablePrefix: "e",
-    }),
-  ]);
-
-  return filter;
-};
-
 /**
  * Detects SDK metadata from recent events (last 7 days).
  *
@@ -3269,7 +3252,16 @@ export async function getSdkMetadataFromEvents(params: {
   const { projectId } = params;
 
   // Time filter: last 7 days
-  const filter = resolveTimeFilter();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const filter = new FilterList([
+    new DateTimeFilter({
+      clickhouseTable: "events_proto",
+      field: "start_time",
+      operator: ">=",
+      value: sevenDaysAgo,
+      tablePrefix: "e",
+    }),
+  ]);
 
   const builder = new EventsQueryBuilder({ projectId })
     .selectRaw("e.scope_name", "e.scope_version", "e.telemetry_sdk_language")
@@ -3303,7 +3295,6 @@ export async function getSdkMetadataFromEvents(params: {
   if (result.length === 0) {
     return { isOtel: false };
   }
-
   const row = result[0];
 
   // Prefer direct columns (v4), fall back to metadata (v3)

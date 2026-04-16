@@ -26,7 +26,7 @@ import {
   getObservationsForTraceFromEventsTable,
   MAX_OBSERVATIONS_PER_TRACE,
   applyCommentFilters,
-  getSdkMetadata,
+  getSdkMetadataFromEvents,
 } from "@langfuse/shared/src/server";
 
 import {
@@ -343,7 +343,7 @@ export const eventsRouter = createTRPCRouter({
         { name: "get-sdk-metadata-trpc" },
         async (span) => {
           span.setAttribute("project_id", input.projectId);
-          return getSdkMetadata({ projectId: input.projectId });
+          return getSdkMetadataFromEvents({ projectId: input.projectId });
         },
       );
     }),
