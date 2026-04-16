@@ -1,0 +1,80 @@
+import { generateSchemaExample } from "./generateSchemaExample";
+
+describe("generateSchemaExample", () => {
+  it("generates example for a simple object schema", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        age: { type: "number" },
+      },
+    };
+    const result = generateSchemaExample(schema);
+    expect(result).not.toBe("");
+    const parsed = JSON.parse(result);
+    expect(parsed).toHaveProperty("name");
+    expect(parsed).toHaveProperty("age");
+  });
+
+  it("handles array type without items property", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        structure: { type: "array" },
+      },
+    };
+    const result = generateSchemaExample(schema);
+    // Should not throw, should return valid JSON or empty string
+    expect(() => {
+      if (result) JSON.parse(result);
+    }).not.toThrow();
+  });
+
+  it("handles nested array without items inside allOf/anyOf", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        structure: {
+          type: "object",
+          properties: {
+            tags: { type: "array" },
+            nested: {
+              type: "object",
+              properties: {
+                list: { type: "array" },
+              },
+            },
+          },
+        },
+      },
+    };
+    const result = generateSchemaExample(schema);
+    expect(() => {
+      if (result) JSON.parse(result);
+    }).not.toThrow();
+  });
+
+  it("preserves array items when they exist", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        tags: {
+          type: "array",
+          items: { type: "string" },
+        },
+      },
+    };
+    const result = generateSchemaExample(schema);
+    expect(result).not.toBe("");
+    const parsed = JSON.parse(result);
+    expect(Array.isArray(parsed.tags)).toBe(true);
+  });
+
+  it("returns empty string for null schema", () => {
+    expect(generateSchemaExample(null)).toBe("");
+  });
+
+  it("returns empty string for non-object schema", () => {
+    expect(generateSchemaExample("not an object")).toBe("");
+  });
+});

@@ -9,8 +9,6 @@ import type { Prisma } from "@langfuse/shared";
 export function generateSchemaExample(schema: Prisma.JsonValue): string {
   try {
     if (!schema || typeof schema !== "object") {
-      console.error("Invalid schema: must be an object", schema);
-
       return "";
     }
     jsf.option({
@@ -23,7 +21,7 @@ export function generateSchemaExample(schema: Prisma.JsonValue): string {
 
     return JSON.stringify(generated, null, 2);
   } catch (error) {
-    console.error("Failed to generate schema example:", error);
+    console.warn("Failed to generate schema example:", error);
 
     return "";
   }
