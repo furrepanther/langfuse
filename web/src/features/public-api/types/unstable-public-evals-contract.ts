@@ -33,6 +33,43 @@ export const PublicEvaluatorModelConfig = z.object({
   model: z.string().min(1),
 });
 
+export const PublicEvaluatorOutputFieldDefinition = z.object({
+  description: z.string().trim().min(1),
+});
+
+export const PublicNumericEvaluatorOutputDefinition = z.object({
+  dataType: z.literal("NUMERIC"),
+  reasoning: PublicEvaluatorOutputFieldDefinition,
+  score: PublicEvaluatorOutputFieldDefinition,
+});
+
+export const PublicBooleanEvaluatorOutputDefinition = z.object({
+  dataType: z.literal("BOOLEAN"),
+  reasoning: PublicEvaluatorOutputFieldDefinition,
+  score: PublicEvaluatorOutputFieldDefinition,
+});
+
+export const PublicCategoricalEvaluatorOutputScoreDefinition = z.object({
+  description: z.string().trim().min(1),
+  categories: z.array(z.string().trim().min(1)).min(2),
+  shouldAllowMultipleMatches: z.boolean(),
+});
+
+export const PublicCategoricalEvaluatorOutputDefinition = z.object({
+  dataType: z.literal("CATEGORICAL"),
+  reasoning: PublicEvaluatorOutputFieldDefinition,
+  score: PublicCategoricalEvaluatorOutputScoreDefinition,
+});
+
+export const PublicEvaluatorOutputDefinition = z.discriminatedUnion(
+  "dataType",
+  [
+    PublicNumericEvaluatorOutputDefinition,
+    PublicBooleanEvaluatorOutputDefinition,
+    PublicCategoricalEvaluatorOutputDefinition,
+  ],
+);
+
 export const PublicContinuousEvaluationTarget = z.enum([
   "observation",
   "experiment",
@@ -155,6 +192,9 @@ export const PublicContinuousEvaluationFilter = z.union([
 
 export type PublicEvaluatorModelConfigType = z.infer<
   typeof PublicEvaluatorModelConfig
+>;
+export type PublicEvaluatorOutputDefinitionType = z.infer<
+  typeof PublicEvaluatorOutputDefinition
 >;
 export type PublicEvaluatorScopeType = z.infer<typeof PublicEvaluatorScope>;
 export type PublicContinuousEvaluationTargetType = z.infer<

@@ -1,4 +1,3 @@
-import type { PersistedEvalOutputDefinition } from "@langfuse/shared";
 import type {
   EvalTemplate,
   JobConfiguration,
@@ -11,6 +10,7 @@ import type {
   PublicContinuousEvaluationStatusType,
   PublicContinuousEvaluationTargetType,
   PublicEvaluatorModelConfigType,
+  PublicEvaluatorOutputDefinitionType,
   PublicEvaluatorScopeType,
 } from "@/src/features/public-api/types/unstable-public-evals-contract";
 
@@ -26,7 +26,7 @@ export type ApiEvaluatorRecord = {
   type: "llm_as_judge";
   prompt: string;
   variables: string[];
-  outputDefinition: PersistedEvalOutputDefinition;
+  outputDefinition: PublicEvaluatorOutputDefinitionType;
   modelConfig: PublicEvaluatorModelConfigType | null;
   continuousEvaluationCount: number;
   createdAt: Date;

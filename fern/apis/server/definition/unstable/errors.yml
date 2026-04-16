@@ -196,6 +196,8 @@ errors:
 
       Typical unstable-eval examples:
       - evaluator version changed during concurrent creation
+      - a continuous evaluation name already exists in the project, so the caller should PATCH the existing resource instead
+      - enabling another public continuous evaluation would exceed the project limit of 50 active public continuous evaluations
       - the underlying state changed between read and write operations, so the client should retry
     status-code: 409
     type: PublicApiError

@@ -313,6 +313,7 @@ export async function assertEvaluatorDefinitionCanRunForPublicApi(params: {
     name: string;
     provider?: string | null;
     model?: string | null;
+    modelParams?: unknown;
     outputDefinition: unknown;
   };
 }) {

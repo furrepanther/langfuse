@@ -4,6 +4,7 @@ import {
   JobConfigState,
   observationVariableMappingList,
   PersistedEvalOutputDefinitionSchema,
+  resolvePersistedEvalOutputDefinition,
   singleFilter,
   type ObservationVariableMapping,
 } from "@langfuse/shared";
@@ -17,6 +18,7 @@ import {
   type PublicContinuousEvaluationMappingType,
   type PublicContinuousEvaluationTargetType,
   type PublicEvaluatorModelConfigType,
+  type PublicEvaluatorOutputDefinitionType,
 } from "@/src/features/public-api/types/unstable-public-evals-contract";
 import type {
   ApiContinuousEvaluationRecord,
@@ -106,7 +108,7 @@ export function deriveEvaluatorVariables(
 
 export function parseStoredOutputDefinition(
   template: Pick<StoredPublicEvaluatorTemplate, "outputDefinition">,
-) {
+): PublicEvaluatorOutputDefinitionType {
   const parsed = PersistedEvalOutputDefinitionSchema.safeParse(
     template.outputDefinition,
   );
@@ -122,7 +124,34 @@ export function parseStoredOutputDefinition(
     throw new InternalServerError("Evaluator output definition is corrupted");
   }
 
-  return parsed.data;
+  const resolvedOutputDefinition = resolvePersistedEvalOutputDefinition(
+    parsed.data,
+  );
+
+  if (resolvedOutputDefinition.dataType === "CATEGORICAL") {
+    return {
+      dataType: "CATEGORICAL",
+      reasoning: {
+        description: resolvedOutputDefinition.reasoningDescription,
+      },
+      score: {
+        description: resolvedOutputDefinition.scoreDescription,
+        categories: resolvedOutputDefinition.categories,
+        shouldAllowMultipleMatches:
+          resolvedOutputDefinition.shouldAllowMultipleMatches,
+      },
+    };
+  }
+
+  return {
+    dataType: resolvedOutputDefinition.dataType,
+    reasoning: {
+      description: resolvedOutputDefinition.reasoningDescription,
+    },
+    score: {
+      description: resolvedOutputDefinition.scoreDescription,
+    },
+  };
 }
 
 export function toApiModelConfig(

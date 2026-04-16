@@ -2,12 +2,12 @@ import { z } from "zod";
 import {
   PublicEvaluatorDefinitionInput,
   PublicEvaluatorModelConfig,
+  PublicEvaluatorOutputDefinition,
   PublicEvaluatorScope,
   PublicEvaluatorType,
   UnstablePublicApiPaginationQuery,
   UnstablePublicApiPaginationResponse,
 } from "@/src/features/public-api/types/unstable-public-evals-contract";
-import { PersistedEvalOutputDefinitionSchema } from "@langfuse/shared";
 
 export const APIEvaluator = z
   .object({
@@ -18,7 +18,7 @@ export const APIEvaluator = z
     type: PublicEvaluatorType,
     prompt: z.string(),
     variables: z.array(z.string()),
-    outputDefinition: PersistedEvalOutputDefinitionSchema,
+    outputDefinition: PublicEvaluatorOutputDefinition,
     modelConfig: PublicEvaluatorModelConfig.nullable(),
     continuousEvaluationCount: z.number().int().nonnegative(),
     createdAt: z.coerce.date(),

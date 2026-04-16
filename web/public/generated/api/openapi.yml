@@ -6124,6 +6124,9 @@ paths:
 
         Key rules:
 
+        - `name` must be unique within the project for public continuous
+        evaluations
+
         - `target` must be `observation` or `experiment`
 
         - `evaluatorId` must reference an existing evaluator returned by the
@@ -6138,6 +6141,24 @@ paths:
 
         - if `enabled=true`, Langfuse validates that the referenced evaluator
         can currently run
+
+        - at most 50 public continuous evaluations can be effectively active in
+        one project at the same time
+
+
+        If a continuous evaluation with the same `name` already exists in the
+        project, the API returns `409`.
+
+        In that case, update the existing resource with `PATCH
+        /api/public/unstable/continuous-evaluations/{continuousEvaluationId}`
+        instead of creating a second one.
+
+
+        If enabling this resource would exceed the 50-active limit, the API also
+        returns `409`.
+
+        In that case, disable or pause another public continuous evaluation
+        before enabling a new one.
 
 
         Current scope:
@@ -6226,6 +6247,12 @@ paths:
           content:
             application/json:
               schema: {}
+        '409':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/unstablePublicApiError'
         '422':
           description: ''
           content:
@@ -6456,6 +6483,10 @@ paths:
 
         - if the resulting config is enabled, Langfuse re-validates that the
         selected evaluator can run
+
+        - if the update would move a non-active public continuous evaluation
+        into the active state and the project already has 50 active public
+        continuous evaluations, the API returns `409`
       operationId: unstable_continuousEvaluations_update
       tags:
         - UnstableContinuousEvaluations
@@ -6658,7 +6689,6 @@ paths:
                       - input
                       - output
                     outputDefinition:
-                      version: 2
                       dataType: NUMERIC
                       reasoning:
                         description: Explain why the score was assigned.
@@ -12086,6 +12116,116 @@ components:
 
         New clients should prefer the version `2` shapes because they are
         explicit about the score data type and field descriptions.
+    unstablePublicNumericEvaluatorOutputDefinition:
+      title: unstablePublicNumericEvaluatorOutputDefinition
+      type: object
+      properties:
+        dataType:
+          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
+          description: Always `NUMERIC`.
+        reasoning:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+        score:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+      required:
+        - dataType
+        - reasoning
+        - score
+    unstablePublicBooleanEvaluatorOutputDefinition:
+      title: unstablePublicBooleanEvaluatorOutputDefinition
+      type: object
+      properties:
+        dataType:
+          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
+          description: Always `BOOLEAN`.
+        reasoning:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+        score:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+      required:
+        - dataType
+        - reasoning
+        - score
+    unstablePublicCategoricalEvaluatorOutputScoreDefinition:
+      title: unstablePublicCategoricalEvaluatorOutputScoreDefinition
+      type: object
+      properties:
+        description:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+        shouldAllowMultipleMatches:
+          type: boolean
+      required:
+        - description
+        - categories
+        - shouldAllowMultipleMatches
+    unstablePublicCategoricalEvaluatorOutputDefinition:
+      title: unstablePublicCategoricalEvaluatorOutputDefinition
+      type: object
+      properties:
+        dataType:
+          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
+          description: Always `CATEGORICAL`.
+        reasoning:
+          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
+        score:
+          $ref: >-
+            #/components/schemas/unstablePublicCategoricalEvaluatorOutputScoreDefinition
+      required:
+        - dataType
+        - reasoning
+        - score
+    unstablePublicEvaluatorOutputDefinition:
+      title: unstablePublicEvaluatorOutputDefinition
+      oneOf:
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                dataType:
+                  type: string
+                  enum:
+                    - NUMERIC
+            - $ref: >-
+                #/components/schemas/unstablePublicNumericEvaluatorOutputDefinition
+          required:
+            - dataType
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                dataType:
+                  type: string
+                  enum:
+                    - BOOLEAN
+            - $ref: >-
+                #/components/schemas/unstablePublicBooleanEvaluatorOutputDefinition
+          required:
+            - dataType
+        - type: object
+          allOf:
+            - type: object
+              properties:
+                dataType:
+                  type: string
+                  enum:
+                    - CATEGORICAL
+            - $ref: >-
+                #/components/schemas/unstablePublicCategoricalEvaluatorOutputDefinition
+          required:
+            - dataType
+      description: >-
+        Evaluator output definition returned by the public API.
+
+
+        This response always includes `dataType` and never includes an internal
+        output-definition `version`.
+
+        Legacy stored evaluator definitions are normalized into this shape
+        before they are returned.
     unstableContinuousEvaluationStringFilterOperator:
       title: unstableContinuousEvaluationStringFilterOperator
       type: string
@@ -13008,11 +13148,13 @@ components:
             - input
             - output
         outputDefinition:
-          $ref: '#/components/schemas/unstableEvaluatorOutputDefinition'
-          description: |-
-            Structured output schema that the evaluator must return.
+          $ref: '#/components/schemas/unstablePublicEvaluatorOutputDefinition'
+          description: >-
+            Structured output schema returned by this evaluator.
 
-            New integrations should prefer the explicit version `2` shapes.
+
+            Responses always include `dataType` and omit the internal
+            output-definition `version`.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true

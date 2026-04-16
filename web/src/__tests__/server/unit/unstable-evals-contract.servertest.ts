@@ -198,6 +198,24 @@ describe("unstable public eval contracts", () => {
       ],
     });
   });
+
+  it("rejects invalid target-specific patch payloads instead of silently parsing a name-only subset", () => {
+    const parsed = PatchUnstableContinuousEvaluationBody.safeParse({
+      name: "experiment-expected-output-match",
+      target: "experiment",
+      filter: [
+        {
+          type: "stringOptions",
+          column: "type",
+          operator: "any of",
+          value: ["GENERATION"],
+        },
+      ],
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.length).toBeGreaterThan(0);
+  });
 });
 
 describe("unstable public eval adapters", () => {
@@ -432,12 +450,57 @@ describe("unstable public eval adapters", () => {
       version: 7,
       scope: "managed",
       type: "llm_as_judge",
+      outputDefinition: {
+        dataType: "NUMERIC",
+        reasoning: {
+          description: "Why the score was assigned",
+        },
+        score: {
+          description: "A score between 0 and 1",
+        },
+      },
       modelConfig: {
         provider: "openai",
         model: "gpt-4.1-mini",
       },
       variables: ["input", "output"],
       continuousEvaluationCount: 2,
+    });
+  });
+
+  it("normalizes legacy evaluator output definitions into the public response shape", () => {
+    const template: StoredPublicEvaluatorTemplate = {
+      id: "tmpl_legacy",
+      projectId: "project_123",
+      name: "answer-correctness",
+      version: 1,
+      prompt: "Judge {{input}} against {{output}}",
+      partner: null,
+      provider: null,
+      model: null,
+      modelParams: null,
+      vars: ["input", "output"],
+      outputDefinition: {
+        reasoning: "Explain why the answer is correct or incorrect.",
+        score: "Return a score between 0 and 1.",
+      },
+      createdAt: new Date("2026-03-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-03-30T09:00:00.000Z"),
+    };
+
+    expect(
+      toApiEvaluator({
+        template,
+        continuousEvaluationCount: 0,
+      }).outputDefinition,
+    ).toEqual({
+      dataType: "NUMERIC",
+      reasoning: {
+        description: "Explain why the answer is correct or incorrect.",
+      },
+      score: {
+        description: "Return a score between 0 and 1.",
+      },
     });
   });
 

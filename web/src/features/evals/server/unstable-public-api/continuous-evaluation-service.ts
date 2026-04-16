@@ -1,6 +1,6 @@
 import { invalidateProjectEvalConfigCaches } from "@langfuse/shared/src/server";
 import { prisma } from "@langfuse/shared/src/db";
-import { JobConfigState } from "@langfuse/shared";
+import { EvalTargetObject, JobConfigState } from "@langfuse/shared";
 import type {
   PatchUnstableContinuousEvaluationBodyType,
   PostUnstableContinuousEvaluationBodyType,
@@ -11,11 +11,34 @@ import {
   toJobConfigurationInput,
 } from "./adapters";
 import {
+  countActivePublicApiContinuousEvaluations,
   findPublicContinuousEvaluationOrThrow,
   listPublicContinuousEvaluationConfigs,
   loadEvaluatorForContinuousEvaluation,
 } from "./queries";
 import { assertEvaluatorDefinitionCanRunForPublicApi } from "./validation";
+import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
+
+const MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS = 50;
+
+async function assertActivePublicApiContinuousEvaluationLimitNotExceeded(
+  projectId: string,
+) {
+  const activeCount = await countActivePublicApiContinuousEvaluations({
+    projectId,
+  });
+
+  if (activeCount >= MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS) {
+    throw createUnstablePublicApiError({
+      httpCode: 409,
+      code: "conflict",
+      message: `This project already has the maximum number of active public continuous evaluations (${MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS}). Disable an existing public continuous evaluation before enabling another one.`,
+      details: {
+        limit: MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS,
+      },
+    });
+  }
+}
 
 export async function listPublicContinuousEvaluations(params: {
   projectId: string;
@@ -48,6 +71,37 @@ export async function createPublicContinuousEvaluation(params: {
   projectId: string;
   input: PostUnstableContinuousEvaluationBodyType;
 }) {
+  const existing = await prisma.jobConfiguration.findFirst({
+    where: {
+      projectId: params.projectId,
+      jobType: "EVAL",
+      targetObject: {
+        in: [EvalTargetObject.EVENT, EvalTargetObject.EXPERIMENT],
+      },
+      scoreName: params.input.name,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existing) {
+    throw createUnstablePublicApiError({
+      httpCode: 409,
+      code: "name_conflict",
+      message: `A continuous evaluation named "${params.input.name}" already exists in this project. Use PATCH /api/public/unstable/continuous-evaluations/${existing.id} to update it instead of creating a duplicate.`,
+      details: {
+        field: "name",
+      },
+    });
+  }
+
+  if (params.input.enabled) {
+    await assertActivePublicApiContinuousEvaluationLimitNotExceeded(
+      params.projectId,
+    );
+  }
+
   const { template } = await loadEvaluatorForContinuousEvaluation({
     projectId: params.projectId,
     evaluatorId: params.input.evaluatorId,
@@ -72,6 +126,7 @@ export async function createPublicContinuousEvaluation(params: {
         name: template.name,
         provider: template.provider,
         model: template.model,
+        modelParams: template.modelParams,
         outputDefinition: template.outputDefinition,
       },
     });
@@ -121,6 +176,16 @@ export async function updatePublicContinuousEvaluation(params: {
     continuousEvaluationId: params.continuousEvaluationId,
   });
   const existingPublic = toApiContinuousEvaluation(existing);
+  const nextEnabled = params.input.enabled ?? existingPublic.enabled;
+  const shouldCountAgainstActiveLimit =
+    nextEnabled && existingPublic.status !== "active";
+
+  if (shouldCountAgainstActiveLimit) {
+    await assertActivePublicApiContinuousEvaluationLimitNotExceeded(
+      params.projectId,
+    );
+  }
+
   const nextEvaluatorId =
     params.input.evaluatorId ?? existingPublic.evaluatorId;
   const { template } = await loadEvaluatorForContinuousEvaluation({
@@ -160,6 +225,7 @@ export async function updatePublicContinuousEvaluation(params: {
         name: template.name,
         provider: template.provider,
         model: template.model,
+        modelParams: template.modelParams,
         outputDefinition: template.outputDefinition,
       },
     });

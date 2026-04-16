@@ -17,14 +17,16 @@ export async function findPublicEvaluatorTemplateOrThrow(params: {
 }) {
   const client = getPrismaClient(params.client);
 
-  const template = await client.evalTemplate.findFirst({
+  const template = await client.evalTemplate.findUnique({
     where: {
       id: params.evaluatorId,
-      OR: [{ projectId: params.projectId }, { projectId: null }],
     },
   });
 
-  if (!template) {
+  if (
+    !template ||
+    (template.projectId !== params.projectId && template.projectId !== null)
+  ) {
     throw new LangfuseNotFoundError(
       "Evaluator not found within authorized project",
     );
@@ -246,6 +248,32 @@ export async function loadEvaluatorForContinuousEvaluation(params: {
   return {
     template,
   };
+}
+
+export async function countActivePublicApiContinuousEvaluations(params: {
+  client?: PrismaClientLike;
+  projectId: string;
+}) {
+  const client = getPrismaClient(params.client);
+  const result = await client.$queryRaw<Array<{ count: bigint }>>(
+    Prisma.sql`
+      SELECT COUNT(DISTINCT jc.id) AS count
+      FROM job_configurations jc
+      INNER JOIN audit_logs al
+        ON al.resource_id = jc.id
+       AND al.resource_type = 'job'
+       AND al.action = 'create'
+       AND al.type = 'API_KEY'
+       AND al.project_id = ${params.projectId}
+      WHERE jc.project_id = ${params.projectId}
+        AND jc.job_type = 'EVAL'
+        AND jc.target_object IN ('event', 'experiment')
+        AND jc.status = 'ACTIVE'
+        AND jc.blocked_at IS NULL
+    `,
+  );
+
+  return result[0] !== undefined ? Number(result[0].count) : 0;
 }
 
 export async function listPublicContinuousEvaluationConfigs(params: {

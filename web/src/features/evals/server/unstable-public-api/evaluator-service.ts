@@ -1,5 +1,12 @@
-import { extractVariables } from "@langfuse/shared";
+import {
+  extractVariables,
+  InternalServerError,
+  observationVariableMappingList,
+  variableMappingList,
+} from "@langfuse/shared";
+import { invalidateProjectEvalConfigCaches } from "@langfuse/shared/src/server";
 import { Prisma, prisma } from "@langfuse/shared/src/db";
+import { z } from "zod";
 import type { PostUnstableEvaluatorBodyType } from "@/src/features/public-api/types/unstable-evaluators";
 import { toApiEvaluator, toStoredModelConfig } from "./adapters";
 import {
@@ -11,6 +18,44 @@ import {
 import { assertEvaluatorDefinitionCanRunForPublicApi } from "./validation";
 import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
 import type { StoredPublicEvaluatorTemplate } from "./types";
+
+function prepareVariableMappingForEvaluatorUpgrade(params: {
+  scoreName: string;
+  variableMapping: unknown;
+  nextVariables: string[];
+}) {
+  const mappingParseResult = z
+    .union([observationVariableMappingList, variableMappingList])
+    .safeParse(params.variableMapping);
+
+  if (!mappingParseResult.success) {
+    throw new InternalServerError("Continuous evaluation mapping is corrupted");
+  }
+
+  const migratedVariableMapping = mappingParseResult.data.filter((mapping) =>
+    params.nextVariables.includes(mapping.templateVariable),
+  );
+  const mappedVariables = new Set(
+    migratedVariableMapping.map((mapping) => mapping.templateVariable),
+  );
+  const missingVariables = params.nextVariables.filter(
+    (variable) => !mappedVariables.has(variable),
+  );
+
+  if (missingVariables.length > 0) {
+    throw createUnstablePublicApiError({
+      httpCode: 409,
+      code: "conflict",
+      message: `Creating a new evaluator version would invalidate the continuous evaluation "${params.scoreName}" because it is missing mappings for new evaluator variables: ${missingVariables.join(", ")}.`,
+      details: {
+        field: "mapping",
+        variables: missingVariables,
+      },
+    });
+  }
+
+  return migratedVariableMapping;
+}
 
 export async function listPublicEvaluators(params: {
   projectId: string;
@@ -69,63 +114,100 @@ export async function createPublicEvaluator(params: {
   });
 
   try {
-    const template = await prisma.$transaction(async (tx) => {
-      const existingProjectTemplates = await tx.evalTemplate.findMany({
-        where: {
-          projectId: params.projectId,
-          name: params.input.name,
-        },
-        orderBy: [
-          {
-            version: "desc",
-          },
-          {
-            createdAt: "desc",
-          },
-          {
-            id: "desc",
-          },
-        ],
-        select: {
-          id: true,
-          version: true,
-        },
-      });
-      const modelConfig = toStoredModelConfig(params.input.modelConfig);
-      const latestProjectTemplate = existingProjectTemplates[0];
-
-      const template = await tx.evalTemplate.create({
-        data: {
-          projectId: params.projectId,
-          name: params.input.name,
-          version: (latestProjectTemplate?.version ?? 0) + 1,
-          prompt: params.input.prompt,
-          provider: modelConfig.provider,
-          model: modelConfig.model,
-          modelParams: modelConfig.modelParams,
-          vars: extractVariables(params.input.prompt),
-          outputDefinition: params.input.outputDefinition,
-        },
-      });
-
-      if (existingProjectTemplates.length > 0) {
-        await tx.jobConfiguration.updateMany({
+    const { template, upgradedConfigCount } = await prisma.$transaction(
+      async (tx) => {
+        const existingProjectTemplates = await tx.evalTemplate.findMany({
           where: {
             projectId: params.projectId,
-            evalTemplateId: {
-              in: existingProjectTemplates.map(
-                (existingTemplate) => existingTemplate.id,
-              ),
-            },
+            name: params.input.name,
           },
-          data: {
-            evalTemplateId: template.id,
+          orderBy: [
+            {
+              version: "desc",
+            },
+            {
+              createdAt: "desc",
+            },
+            {
+              id: "desc",
+            },
+          ],
+          select: {
+            id: true,
+            version: true,
           },
         });
-      }
+        const nextVariables = extractVariables(params.input.prompt);
+        const configsToUpgrade =
+          existingProjectTemplates.length > 0
+            ? await tx.jobConfiguration.findMany({
+                where: {
+                  projectId: params.projectId,
+                  evalTemplateId: {
+                    in: existingProjectTemplates.map(
+                      (existingTemplate) => existingTemplate.id,
+                    ),
+                  },
+                },
+                select: {
+                  id: true,
+                  scoreName: true,
+                  variableMapping: true,
+                },
+              })
+            : [];
+        const upgradedConfigs = configsToUpgrade.map((config) => ({
+          id: config.id,
+          variableMapping: prepareVariableMappingForEvaluatorUpgrade({
+            scoreName: config.scoreName,
+            variableMapping: config.variableMapping,
+            nextVariables,
+          }),
+        }));
+        const modelConfig = toStoredModelConfig(params.input.modelConfig);
+        const latestProjectTemplate = existingProjectTemplates[0];
 
-      return template;
-    });
+        const template = await tx.evalTemplate.create({
+          data: {
+            projectId: params.projectId,
+            name: params.input.name,
+            version: (latestProjectTemplate?.version ?? 0) + 1,
+            prompt: params.input.prompt,
+            provider: modelConfig.provider,
+            model: modelConfig.model,
+            modelParams: modelConfig.modelParams,
+            vars: nextVariables,
+            outputDefinition: params.input.outputDefinition,
+          },
+        });
+
+        if (upgradedConfigs.length > 0) {
+          await Promise.all(
+            upgradedConfigs.map((config) =>
+              tx.jobConfiguration.update({
+                where: {
+                  id: config.id,
+                  projectId: params.projectId,
+                },
+                data: {
+                  evalTemplateId: template.id,
+                  variableMapping: config.variableMapping,
+                },
+              }),
+            ),
+          );
+        }
+
+        return {
+          template,
+          upgradedConfigCount: upgradedConfigs.length,
+        };
+      },
+    );
+
+    if (upgradedConfigCount > 0) {
+      await invalidateProjectEvalConfigCaches(params.projectId);
+    }
 
     const continuousEvaluationCount =
       await countContinuousEvaluationsForEvaluator({

@@ -88,6 +88,9 @@ const ContinuousEvaluationPatchBase = {
 
 const UntargetedContinuousEvaluationPatch = z.object({
   ...ContinuousEvaluationPatchBase,
+  target: z.undefined().optional(),
+  filter: z.undefined().optional(),
+  mapping: z.undefined().optional(),
 });
 
 const ObservationContinuousEvaluationPatch = z.object({

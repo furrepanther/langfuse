@@ -85,7 +85,6 @@ service:
                 - input
                 - output
               outputDefinition:
-                version: 2
                 dataType: NUMERIC
                 reasoning:
                   description: Explain why the score was assigned.
@@ -190,11 +189,11 @@ types:
 
           Every variable in this list must be mapped exactly once when creating a continuous evaluation.
       outputDefinition:
-        type: commons.EvaluatorOutputDefinition
+        type: commons.PublicEvaluatorOutputDefinition
         docs: |
-          Structured output schema that the evaluator must return.
+          Structured output schema returned by this evaluator.
 
-          New integrations should prefer the explicit version `2` shapes.
+          Responses always include `dataType` and omit the internal output-definition `version`.
       modelConfig:
         type: nullable<commons.EvaluatorModelConfig>
         docs: Explicit model configuration, or `null` when the project default evaluation model is used.

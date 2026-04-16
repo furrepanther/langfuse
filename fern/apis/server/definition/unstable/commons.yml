@@ -210,6 +210,60 @@ types:
               - incorrect
             shouldAllowMultipleMatches: false
 
+  PublicNumericEvaluatorOutputDefinition:
+    properties:
+      dataType:
+        type: EvaluatorOutputDataType
+        docs: Always `NUMERIC`.
+      reasoning:
+        type: EvaluatorOutputFieldDefinition
+      score:
+        type: EvaluatorOutputFieldDefinition
+
+  PublicBooleanEvaluatorOutputDefinition:
+    properties:
+      dataType:
+        type: EvaluatorOutputDataType
+        docs: Always `BOOLEAN`.
+      reasoning:
+        type: EvaluatorOutputFieldDefinition
+      score:
+        type: EvaluatorOutputFieldDefinition
+
+  PublicCategoricalEvaluatorOutputScoreDefinition:
+    properties:
+      description:
+        type: string
+      categories:
+        type: list<string>
+      shouldAllowMultipleMatches:
+        type: boolean
+
+  PublicCategoricalEvaluatorOutputDefinition:
+    properties:
+      dataType:
+        type: EvaluatorOutputDataType
+        docs: Always `CATEGORICAL`.
+      reasoning:
+        type: EvaluatorOutputFieldDefinition
+      score:
+        type: PublicCategoricalEvaluatorOutputScoreDefinition
+
+  PublicEvaluatorOutputDefinition:
+    docs: |
+      Evaluator output definition returned by the public API.
+
+      This response always includes `dataType` and never includes an internal output-definition `version`.
+      Legacy stored evaluator definitions are normalized into this shape before they are returned.
+    discriminant: dataType
+    union:
+      NUMERIC:
+        type: PublicNumericEvaluatorOutputDefinition
+      BOOLEAN:
+        type: PublicBooleanEvaluatorOutputDefinition
+      CATEGORICAL:
+        type: PublicCategoricalEvaluatorOutputDefinition
+
   ContinuousEvaluationStringFilterOperator:
     enum:
       - name: Equals

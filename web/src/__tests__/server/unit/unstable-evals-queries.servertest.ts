@@ -13,6 +13,7 @@ jest.mock("@langfuse/shared/src/db", () => {
       evalTemplate: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
       },
       jobConfiguration: {
         groupBy: jest.fn(),
@@ -23,6 +24,7 @@ jest.mock("@langfuse/shared/src/db", () => {
 
 import { prisma } from "@langfuse/shared/src/db";
 import {
+  countActivePublicApiContinuousEvaluations,
   countContinuousEvaluationsForEvaluatorIds,
   loadEvaluatorForContinuousEvaluation,
   listPublicEvaluatorTemplates,
@@ -31,6 +33,7 @@ import {
 const mockQueryRaw = prisma.$queryRaw as jest.Mock;
 const mockEvalTemplateFindMany = prisma.evalTemplate.findMany as jest.Mock;
 const mockEvalTemplateFindFirst = prisma.evalTemplate.findFirst as jest.Mock;
+const mockEvalTemplateFindUnique = prisma.evalTemplate.findUnique as jest.Mock;
 const mockJobConfigurationGroupBy = prisma.jobConfiguration
   .groupBy as jest.Mock;
 
@@ -130,33 +133,42 @@ describe("unstable public eval queries", () => {
     });
   });
 
+  it("counts only active public-api-created continuous evaluations", async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ count: 17n }]);
+
+    const result = await countActivePublicApiContinuousEvaluations({
+      projectId: "project_123",
+    });
+
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+    expect(result).toBe(17);
+  });
+
   it("resolves continuous evaluation evaluator ids to the latest version in the same family", async () => {
-    mockEvalTemplateFindFirst
-      .mockResolvedValueOnce({
-        id: "tmpl_project_v1",
-        projectId: "project_123",
-        name: "Answer correctness",
-        version: 1,
-      })
-      .mockResolvedValueOnce({
-        id: "tmpl_project_v3",
-        projectId: "project_123",
-        name: "Answer correctness",
-        version: 3,
-      });
+    mockEvalTemplateFindUnique.mockResolvedValueOnce({
+      id: "tmpl_project_v1",
+      projectId: "project_123",
+      name: "Answer correctness",
+      version: 1,
+    });
+    mockEvalTemplateFindFirst.mockResolvedValueOnce({
+      id: "tmpl_project_v3",
+      projectId: "project_123",
+      name: "Answer correctness",
+      version: 3,
+    });
 
     const result = await loadEvaluatorForContinuousEvaluation({
       projectId: "project_123",
       evaluatorId: "tmpl_project_v1",
     });
 
-    expect(mockEvalTemplateFindFirst).toHaveBeenNthCalledWith(1, {
+    expect(mockEvalTemplateFindUnique).toHaveBeenCalledWith({
       where: {
         id: "tmpl_project_v1",
-        OR: [{ projectId: "project_123" }, { projectId: null }],
       },
     });
-    expect(mockEvalTemplateFindFirst).toHaveBeenNthCalledWith(2, {
+    expect(mockEvalTemplateFindFirst).toHaveBeenCalledWith({
       where: {
         projectId: "project_123",
         name: "Answer correctness",
@@ -166,5 +178,31 @@ describe("unstable public eval queries", () => {
       },
     });
     expect(result.template.id).toBe("tmpl_project_v3");
+  });
+
+  it("resolves exact evaluator ids through a unique lookup before checking scope", async () => {
+    mockEvalTemplateFindUnique.mockResolvedValueOnce({
+      id: "tmpl_project_v2",
+      projectId: "project_123",
+      name: "Answer correctness",
+      version: 2,
+    });
+    mockEvalTemplateFindFirst.mockResolvedValueOnce({
+      id: "tmpl_project_v2",
+      projectId: "project_123",
+      name: "Answer correctness",
+      version: 2,
+    });
+
+    await loadEvaluatorForContinuousEvaluation({
+      projectId: "project_123",
+      evaluatorId: "tmpl_project_v2",
+    });
+
+    expect(mockEvalTemplateFindUnique).toHaveBeenCalledWith({
+      where: {
+        id: "tmpl_project_v2",
+      },
+    });
   });
 });
