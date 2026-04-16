@@ -1,9 +1,9 @@
 #!/bin/sh
 
-# Check whether a DATABASE_URL's credentials contain characters that typically
+# Check whether a database URL's credentials contain characters that typically
 # need percent-encoding for Prisma (@ : / %).  Best-effort heuristic — strips
 # the scheme, isolates the user:password portion, and checks for common
-# offenders.  Skips values that already look percent-encoded (%XX).
+# offenders.  Strips %XX sequences first so partially-encoded values are caught.
 check_unencoded_credentials() {
     _url="$1"
     _no_scheme="${_url#*://}"
@@ -15,11 +15,10 @@ check_unencoded_credentials() {
             _pass="${_creds#*:}"
             _found=""
             for _val in "$_user" "$_pass"; do
-                # Skip if it already looks percent-encoded
-                if printf '%s' "$_val" | grep -q '%[0-9A-Fa-f][0-9A-Fa-f]'; then
-                    continue
-                fi
-                case "$_val" in
+                # Strip valid percent-encoded sequences before checking so
+                # partially-encoded values like p%40ss@word are still caught.
+                _stripped=$(printf '%s' "$_val" | sed 's/%[0-9A-Fa-f][0-9A-Fa-f]//g')
+                case "$_stripped" in
                     *@*|*:*|*/*|*%*) _found="true" ;;
                 esac
             done
@@ -34,20 +33,19 @@ check_unencoded_credentials() {
 }
 
 # Check whether CLICKHOUSE_PASSWORD contains characters that would break the
-# query-string interpolation used in the migration script (& = # ? % +).
-# Skips values that already look percent-encoded (%XX).
+# query-string interpolation used in the migration script (& = # ? % + @ space).
+# Strips %XX sequences first so partially-encoded values are caught.
 check_clickhouse_password() {
     _pass="$1"
     if [ -z "$_pass" ]; then
         return
     fi
-    # Skip if it already looks percent-encoded
-    if printf '%s' "$_pass" | grep -q '%[0-9A-Fa-f][0-9A-Fa-f]'; then
-        return
-    fi
-    case "$_pass" in
+    # Strip valid percent-encoded sequences before checking so
+    # partially-encoded values are still caught.
+    _stripped=$(printf '%s' "$_pass" | sed 's/%[0-9A-Fa-f][0-9A-Fa-f]//g')
+    case "$_stripped" in
         *'&'*|*'='*|*'#'*|*'?'*|*'%'*|*'+'*|*'@'*|*' '*)
-            echo "HINT: Your CLICKHOUSE_PASSWORD contains special characters (&, =, #, ?, %, +, @) that may break the migration URL."
+            echo "HINT: Your CLICKHOUSE_PASSWORD contains special characters (&, =, #, ?, %, +, @, space) that may break the migration URL."
             echo "  These characters need to be percent-encoded when passed as query parameters."
             echo "  Example: p@ss&word → p%40ss%26word"
             ;;
@@ -97,8 +95,8 @@ status=$?
 if [ $status -ne 0 ]; then
     echo "Applying database migrations failed. Common causes:"
     echo "  1. The database is unavailable or unreachable."
-    echo "  2. DATABASE_URL credentials contain special characters that are not URL-encoded."
-    check_unencoded_credentials "$DATABASE_URL"
+    echo "  2. DATABASE_URL / DIRECT_URL credentials contain special characters that are not URL-encoded."
+    check_unencoded_credentials "$DIRECT_URL"
     echo "Exiting..."
     exit $status
 fi
