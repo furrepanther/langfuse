@@ -33,6 +33,27 @@ check_unencoded_credentials() {
     esac
 }
 
+# Check whether CLICKHOUSE_PASSWORD contains characters that would break the
+# query-string interpolation used in the migration script (& = # ? % +).
+# Skips values that already look percent-encoded (%XX).
+check_clickhouse_password() {
+    _pass="$1"
+    if [ -z "$_pass" ]; then
+        return
+    fi
+    # Skip if it already looks percent-encoded
+    if printf '%s' "$_pass" | grep -q '%[0-9A-Fa-f][0-9A-Fa-f]'; then
+        return
+    fi
+    case "$_pass" in
+        *'&'*|*'='*|*'#'*|*'?'*|*'%'*|*'+'*|*'@'*|*' '*)
+            echo "HINT: Your CLICKHOUSE_PASSWORD contains special characters (&, =, #, ?, %, +, @) that may break the migration URL."
+            echo "  These characters need to be percent-encoded when passed as query parameters."
+            echo "  Example: p@ss&word → p%40ss%26word"
+            ;;
+    esac
+}
+
 # Run cleanup script before running migrations
 # Check if DATABASE_URL is not set
 if [ -z "$DATABASE_URL" ]; then
@@ -93,7 +114,10 @@ fi
 
 # If migration fails (returns non-zero exit status), exit script with that status
 if [ $status -ne 0 ]; then
-    echo "Applying clickhouse migrations failed. This is mostly caused by the database being unavailable."
+    echo "Applying clickhouse migrations failed. Common causes:"
+    echo "  1. The database is unavailable or unreachable."
+    echo "  2. CLICKHOUSE_PASSWORD contains special characters that are not URL-encoded."
+    check_clickhouse_password "$CLICKHOUSE_PASSWORD"
     echo "Exiting..."
     exit $status
 fi
