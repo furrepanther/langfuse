@@ -1,7 +1,7 @@
 // Mock the problematic @langfuse/shared import before importing our functions
 vi.mock("@langfuse/shared", async () => {
   const actual = await vi.importActual("@langfuse/shared");
-  const { z } = (await vi.importActual("zod")) as Record<string, unknown>;
+  const { z } = (await vi.importActual("zod")) as any;
 
   const OpenAITextContentPart = z.object({
     type: z.literal("text"),
