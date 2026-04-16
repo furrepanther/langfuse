@@ -212,10 +212,8 @@ function SavedViewHarness() {
 
 function ViewSelectionHarness({
   tableName = TableViewPresetTableName.Traces,
-  viewPersistenceKey,
 }: {
   tableName?: TableViewPresetTableName;
-  viewPersistenceKey?: string;
 }) {
   const [appliedFilters, setAppliedFilters] = useState<FilterState>([]);
   const { selectedViewId, handleSetViewId } = useTableViewManager({
@@ -231,7 +229,6 @@ function ViewSelectionHarness({
       filterColumnDefinition: TEST_FILTER_CONFIG.columnDefinitions,
     },
     currentFilterState: appliedFilters,
-    viewPersistenceKey,
   });
 
   return (
@@ -470,7 +467,7 @@ describe("Saved view restore with implicit environment defaults", () => {
     expect(queryParamStore.has("viewId")).toBe(false);
   });
 
-  it("does not restore a stored saved view from another mode's persistence key", async () => {
+  it("does not restore a stored saved view from another table namespace", async () => {
     queryParamStore.delete("viewId");
     mockUseRouter.mockReturnValue({
       isReady: true,
@@ -478,14 +475,13 @@ describe("Saved view restore with implicit environment defaults", () => {
     });
 
     sessionStorage.setItem(
-      "observations-v3-project-1-viewId",
+      "observations-project-1-viewId",
       JSON.stringify("view-1"),
     );
 
     render(
       <ViewSelectionHarness
-        tableName={TableViewPresetTableName.Observations}
-        viewPersistenceKey="observations-v4"
+        tableName={TableViewPresetTableName.ObservationsEvents}
       />,
     );
 

@@ -168,7 +168,6 @@ export type EventsTableProps = {
   userId?: string;
   omittedFilter?: ObservationEventsOmittableFilterColumn[];
   hideControls?: boolean;
-  viewPersistenceKey?: string;
   // External control props for embedded preview tables
   externalFilterState?: FilterState;
   externalDateRange?: TableDateRange;
@@ -181,7 +180,6 @@ export default function ObservationsEventsTable({
   userId,
   omittedFilter = [],
   hideControls = false,
-  viewPersistenceKey,
   externalFilterState,
   externalDateRange,
   limitRows,
@@ -1153,9 +1151,8 @@ export default function ObservationsEventsTable({
   });
 
   const { isLoading: isViewLoading, ...viewControllers } = useTableViewManager({
-    tableName: TableViewPresetTableName.Observations,
+    tableName: TableViewPresetTableName.ObservationsEvents,
     projectId,
-    viewPersistenceKey,
     stateUpdaters: {
       setOrderBy: setOrderByState,
       setFilters: setFiltersWrapper,
@@ -1288,7 +1285,7 @@ export default function ObservationsEventsTable({
               tableAllowsFullTextSearch: true,
             }}
             viewConfig={{
-              tableName: TableViewPresetTableName.Observations,
+              tableName: TableViewPresetTableName.ObservationsEvents,
               projectId,
               controllers: viewControllers,
             }}

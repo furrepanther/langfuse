@@ -138,7 +138,6 @@ export type ObservationsTableProps = {
   omittedFilter?: ObservationsOmittableFilterColumn[];
   // External control props for embedded preview tables
   hideControls?: boolean;
-  viewPersistenceKey?: string;
   externalFilterState?: FilterState;
   externalDateRange?: TableDateRange;
   limitRows?: number;
@@ -151,7 +150,6 @@ export default function ObservationsTable({
   modelId,
   omittedFilter = [],
   hideControls = false,
-  viewPersistenceKey,
   externalFilterState,
   externalDateRange,
   limitRows,
@@ -1223,7 +1221,6 @@ export default function ObservationsTable({
   const { isLoading: isViewLoading, ...viewControllers } = useTableViewManager({
     tableName: TableViewPresetTableName.Observations,
     projectId,
-    viewPersistenceKey,
     stateUpdaters: {
       setOrderBy: setOrderByState,
       setFilters: setFiltersWrapper,
