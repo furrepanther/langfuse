@@ -22,7 +22,12 @@ service:
         Recommended workflow:
         1. Create the evaluator.
         2. Read the returned `variables` array.
-        3. Create one or more continuous evaluations that reference the returned `id`.
+        3. Read the returned `outputDefinition.dataType` so the client knows whether future scores will be numeric, boolean, or categorical.
+        4. Create one or more continuous evaluations that reference the returned `id`.
+
+        Recovery guidance:
+        - `422` with `code=evaluator_preflight_failed`: the evaluator cannot run with the resolved model configuration. Add a valid explicit `modelConfig`, or configure the project's default evaluation model, then retry the same request.
+        - `400` with `code=invalid_body`: the request shape is malformed. Use the structured `details.issues` array to fix the specific fields and retry.
 
         Unstable API note:
         - This surface may evolve while the underlying evaluation data model is being redesigned.
@@ -159,6 +164,11 @@ types:
 
       It does not define **which** live objects are evaluated. That is the job of `continuous-evaluations`.
 
+      For agent clients, the most important fields are:
+      - `variables`: use these exact names when building the continuous-evaluation `mapping` array
+      - `outputDefinition`: tells you the expected score type and the evaluator's response instructions
+      - `modelConfig`: tells you whether the evaluator uses the project default model (`null`) or an explicit provider/model
+
       Versioning behavior:
       - `GET /evaluators` returns the latest version of each available evaluator.
       - `GET /evaluators/{id}` can return an older version.
@@ -194,6 +204,7 @@ types:
           Structured output schema returned by this evaluator.
 
           Responses always include `dataType` and omit the internal output-definition `version`.
+          Use `dataType` to decide how future scores should be interpreted.
       modelConfig:
         type: nullable<commons.EvaluatorModelConfig>
         docs: Explicit model configuration, or `null` when the project default evaluation model is used.
@@ -233,6 +244,7 @@ types:
           Structured output schema the evaluator must return.
 
           New integrations should prefer the explicit version `2` shapes.
+          In the response, Langfuse normalizes this into the public response shape that always includes `dataType` and never includes the internal `version`.
       modelConfig:
         type: optional<nullable<commons.EvaluatorModelConfig>>
         docs: Optional explicit model configuration. Omit or set to `null` to use the project default evaluation model.

@@ -94,7 +94,7 @@ types:
         docs: Suggested retry delay for rate-limited requests.
       limit:
         type: optional<integer>
-        docs: Total number of requests allowed in the current rate-limit window.
+        docs: Numeric limit associated with the failure, for example the active continuous-evaluation cap or the current rate-limit window.
       remaining:
         type: optional<integer>
         docs: Remaining requests in the current rate-limit window.
@@ -110,6 +110,7 @@ types:
       - Use the HTTP status code for the broad class of failure.
       - Use `code` for precise branching in SDKs, CLIs, or agents.
       - Inspect `details` for field-level validation context such as invalid filter values, malformed JSONPath expressions, or missing variable mappings.
+      - Retry only after fixing the specific issue described by `code` and `details`.
     properties:
       message:
         type: string
@@ -142,6 +143,34 @@ types:
             evaluatorName: answer-correctness
             provider: null
             model: null
+      - name: MissingVariableMapping
+        value:
+          message: 'Missing mappings for evaluator variable(s): output'
+          code: missing_variable_mapping
+          details:
+            field: mapping
+            variables:
+              - output
+      - name: InvalidJsonPath
+        value:
+          message: 'Mapping for variable "customer_tier" has an invalid jsonPath "$[". JSONPath expressions must use balanced quotes, brackets, and parentheses.'
+          code: invalid_json_path
+          details:
+            field: mapping[0].jsonPath
+            variable: customer_tier
+            value: "$["
+      - name: NameConflict
+        value:
+          message: 'A continuous evaluation named "answer-quality-live" already exists in this project. Use PATCH /api/public/unstable/continuous-evaluations/ceval_123 to update it instead of creating a duplicate.'
+          code: name_conflict
+          details:
+            field: name
+      - name: ActiveContinuousEvaluationLimit
+        value:
+          message: This project already has the maximum number of active public continuous evaluations (50). Disable an existing public continuous evaluation before enabling another one.
+          code: conflict
+          details:
+            limit: 50
       - name: RateLimited
         value:
           message: Rate limit exceeded
@@ -162,6 +191,11 @@ errors:
       - unsupported filter value
       - invalid JSONPath selector
       - missing or duplicate variable mappings
+
+      Recovery guidance:
+      - read `details.issues` for malformed bodies or queries
+      - read `details.column`, `details.invalidValues`, and `details.allowedValues` for filter problems
+      - read `details.variable` or `details.variables` for mapping problems
     status-code: 400
     type: PublicApiError
   UnauthorizedError:
@@ -199,6 +233,10 @@ errors:
       - a continuous evaluation name already exists in the project, so the caller should PATCH the existing resource instead
       - enabling another public continuous evaluation would exceed the project limit of 50 active public continuous evaluations
       - the underlying state changed between read and write operations, so the client should retry
+
+      Recovery guidance:
+      - for `name_conflict`, PATCH the existing continuous evaluation instead of creating another one
+      - for the active-limit conflict, disable another public continuous evaluation before enabling a new one
     status-code: 409
     type: PublicApiError
   UnprocessableContentError:
@@ -206,6 +244,10 @@ errors:
       The request is syntactically valid, but Langfuse cannot accept it in its current form.
 
       The most important unstable-eval case is `code=evaluator_preflight_failed`, which means the evaluator cannot currently run with the resolved model configuration.
+
+      Recovery guidance:
+      - configure the project's default evaluation model, or send a valid explicit evaluator `modelConfig`
+      - once the model configuration is valid, retry the same request
     status-code: 422
     type: PublicApiError
   TooManyRequestsError:
