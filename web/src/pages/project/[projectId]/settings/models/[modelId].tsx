@@ -319,11 +319,7 @@ export default function ModelDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="flex max-h-[calc(100vh-20rem)] flex-col">
-              <Generations
-                projectId={projectId}
-                omittedFilter={["Model"]}
-                modelId={model.id}
-              />
+              <Generations projectId={projectId} modelId={model.id} />
             </div>
           </CardContent>
         </Card>

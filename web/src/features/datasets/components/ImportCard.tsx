@@ -13,14 +13,11 @@ import type { CsvColumnPreview } from "@/src/features/datasets/lib/csv/types";
 type ImportCardProps = {
   title: string;
   columns: CsvColumnPreview[];
-  onColumnSelect: (columnName: string) => void;
-  onColumnRemove: (columnName: string) => void;
   id: UniqueIdentifier;
   className?: string;
   info?: string;
   schemaKeys?: string[]; // Schema-driven mode
   schemaKeyMapping?: Map<string, string>; // {schemaKey: csvColumn}
-  onSchemaKeyMap?: (schemaKey: string, csvColumn: string) => void;
 };
 
 function DraggableColumn({

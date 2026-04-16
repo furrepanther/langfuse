@@ -134,7 +134,6 @@ export type ObservationsTableProps = {
   promptName?: string;
   promptVersion?: number;
   modelId?: string;
-  omittedFilter?: string[];
   // External control props for embedded preview tables
   hideControls?: boolean;
   viewPersistenceKey?: string;
@@ -1172,6 +1171,7 @@ export default function ObservationsTable({
           id: "outputCost",
           header: "Output Cost",
           size: 120,
+          // eslint-disable-next-line react/no-unused-prop-types -- false positive on typed TanStack cell renderer context
           cell: ({ row }: { row: Row<ObservationsTableRow> }) => {
             const value: {
               inputCost: number | undefined;
