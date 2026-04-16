@@ -4,12 +4,12 @@ import { createMessageSearchController } from "./controller";
 
 describe("message search controller", () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   const commitQuery = (
@@ -17,7 +17,7 @@ describe("message search controller", () => {
     query: string,
   ) => {
     controller.setQueryInput(query);
-    jest.runAllTimers();
+    vi.runAllTimers();
     return controller.getSnapshot().matches;
   };
 
@@ -165,7 +165,7 @@ describe("message search controller", () => {
     ]);
 
     controller.setQueryInput("   ");
-    jest.runAllTimers();
+    vi.runAllTimers();
 
     expect(controller.getSnapshot().queryInput).toBe("   ");
     expect(controller.getSnapshot().query).toBe("   ");
