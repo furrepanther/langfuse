@@ -1,5 +1,38 @@
 #!/bin/sh
 
+# Check whether a DATABASE_URL's credentials contain characters that typically
+# need percent-encoding for Prisma (@ : / %).  Best-effort heuristic — strips
+# the scheme, isolates the user:password portion, and checks for common
+# offenders.  Skips values that already look percent-encoded (%XX).
+check_unencoded_credentials() {
+    _url="$1"
+    _no_scheme="${_url#*://}"
+    case "$_no_scheme" in
+        *@*)
+            _host_part="${_no_scheme##*@}"
+            _creds="${_no_scheme%@"$_host_part"}"
+            _user="${_creds%%:*}"
+            _pass="${_creds#*:}"
+            _found=""
+            for _val in "$_user" "$_pass"; do
+                # Skip if it already looks percent-encoded
+                if printf '%s' "$_val" | grep -q '%[0-9A-Fa-f][0-9A-Fa-f]'; then
+                    continue
+                fi
+                case "$_val" in
+                    *@*|*:*|*/*|*%*) _found="true" ;;
+                esac
+            done
+            if [ "$_found" = "true" ]; then
+                echo "HINT: Your DATABASE_URL credentials appear to contain special characters (@, :, /, %) that are not URL-encoded."
+                echo "  Prisma requires these to be percent-encoded, otherwise you will see P1013 errors."
+                echo "  Example: p@ssword → p%40ssword"
+                echo "  Reference: https://www.prisma.io/docs/orm/reference/connection-urls#special-characters"
+            fi
+            ;;
+    esac
+}
+
 # Run cleanup script before running migrations
 # Check if DATABASE_URL is not set
 if [ -z "$DATABASE_URL" ]; then
@@ -41,7 +74,10 @@ status=$?
 
 # If migration fails (returns non-zero exit status), exit script with that status
 if [ $status -ne 0 ]; then
-    echo "Applying database migrations failed. This is mostly caused by the database being unavailable."
+    echo "Applying database migrations failed. Common causes:"
+    echo "  1. The database is unavailable or unreachable."
+    echo "  2. DATABASE_URL credentials contain special characters that are not URL-encoded."
+    check_unencoded_credentials "$DATABASE_URL"
     echo "Exiting..."
     exit $status
 fi
