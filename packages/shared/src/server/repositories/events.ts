@@ -3290,6 +3290,7 @@ export async function getSdkMetadataFromEvents(params: {
       kind: "sdkMetadata",
       projectId,
     },
+    preferredClickhouseService: "EventsReadOnly",
   });
 
   if (result.length === 0) {
