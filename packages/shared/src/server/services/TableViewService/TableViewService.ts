@@ -184,7 +184,7 @@ export class TableViewService {
     tableName: TableViewPresetTableName,
     projectId: string,
   ): Promise<TableViewPresetsNamesCreatorList> {
-    const TableViewPresets = await prisma.tableViewPreset.findMany({
+    const records = await prisma.tableViewPreset.findMany({
       where: {
         tableName: {
           in: getReadCompatibleTableNames(tableName),
@@ -194,6 +194,7 @@ export class TableViewService {
       select: {
         id: true,
         name: true,
+        tableName: true,
         createdBy: true,
         createdByUser: {
           select: {
@@ -209,7 +210,33 @@ export class TableViewService {
       },
     });
 
-    return TableViewPresetsNamesCreatorListSchema.parse(TableViewPresets);
+    const presets = TableViewPresetsNamesCreatorListSchema.parse(records);
+
+    if (tableName === TableViewPresetTableName.ObservationsEvents) {
+      // Deduplicate presets that have the same name,
+      // preferring presets that belong to the canonical events table namespace
+      // over presets that belong to the legacy observations namespace.
+      const presetsByName = new Map<
+        string,
+        TableViewPresetsNamesCreatorList[number]
+      >();
+
+      for (const preset of presets) {
+        const existingPreset = presetsByName.get(preset.name);
+
+        if (
+          !existingPreset ||
+          (preset.tableName === TableViewPresetTableName.ObservationsEvents &&
+            existingPreset.tableName === TableViewPresetTableName.Observations)
+        ) {
+          presetsByName.set(preset.name, preset);
+        }
+      }
+
+      return Array.from(presetsByName.values());
+    }
+
+    return presets;
   }
 
   /**

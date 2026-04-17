@@ -37,6 +37,7 @@ export const TableViewPresetsNamesCreatorListSchema = z.array(
   z.object({
     id: z.string(),
     name: z.string(),
+    tableName: z.enum(TableViewPresetTableName),
     createdBy: z.string().nullable(),
     createdByUser: z
       .object({

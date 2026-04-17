@@ -11,7 +11,6 @@ import {
   LangfuseConflictError,
   TableViewPresetTableName,
 } from "@langfuse/shared";
-
 const createTableViewPreset = async ({
   projectId,
   name = `view-${randomUUID()}`,
@@ -50,6 +49,36 @@ describe("table view namespace compatibility", () => {
     );
 
     expect(presets.map((preset) => preset.id)).toContain(legacyPreset.id);
+  });
+
+  it("deduplicates same-named events presets in favor of the canonical namespace", async () => {
+    const { projectId } = await createOrgProjectAndApiKey();
+    const name = `shared-name-${randomUUID()}`;
+
+    await createTableViewPreset({
+      projectId,
+      name,
+      tableName: TableViewPresetTableName.Observations,
+    });
+
+    const canonicalPreset = await createTableViewPreset({
+      projectId,
+      name,
+      tableName: TableViewPresetTableName.ObservationsEvents,
+    });
+
+    const presets = await TableViewService.getTableViewPresetsByTableName(
+      TableViewPresetTableName.ObservationsEvents,
+      projectId,
+    );
+
+    expect(presets.filter((preset) => preset.name === name)).toEqual([
+      expect.objectContaining({
+        id: canonicalPreset.id,
+        name,
+        tableName: TableViewPresetTableName.ObservationsEvents,
+      }),
+    ]);
   });
 
   it("resolves a legacy observations default for the events table", async () => {
