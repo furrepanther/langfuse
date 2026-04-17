@@ -1,4 +1,4 @@
-import { generateJson } from "json-schema-faker";
+import { generateJson, type JsonSchema } from "json-schema-faker";
 import type { Prisma } from "@langfuse/shared";
 
 /**
@@ -14,7 +14,7 @@ export async function generateSchemaExample(
       return "";
     }
 
-    return await generateJson(schema, {
+    return await generateJson(schema as JsonSchema, {
       alwaysFakeOptionals: true,
       useDefaultValue: true,
       useExamplesValue: true,
