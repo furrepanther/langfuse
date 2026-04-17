@@ -14,7 +14,8 @@ import {
 } from "@/src/features/filters/hooks/useSidebarFilterState";
 import {
   getEventsColumnName,
-  observationEventsFilterConfig,
+  getObservationEventsFilterConfig,
+  type ObservationEventsOmittableFilterColumn,
 } from "../config/filter-config";
 import { DEFAULT_SIDEBAR_IMPLICIT_ENVIRONMENT_CONFIG } from "@/src/features/filters/constants/internal-environments";
 import { formatIntervalSeconds } from "@/src/utils/dates";
@@ -169,6 +170,7 @@ export type EventsTableRow = {
 export type EventsTableProps = {
   projectId: string;
   userId?: string;
+  omittedFilter?: ObservationEventsOmittableFilterColumn[];
   hideControls?: boolean;
   viewPersistenceKey?: string;
   // External control props for embedded preview tables
@@ -181,6 +183,7 @@ export type EventsTableProps = {
 export default function ObservationsEventsTable({
   projectId,
   userId,
+  omittedFilter = [],
   hideControls = false,
   viewPersistenceKey,
   externalFilterState,
@@ -191,6 +194,10 @@ export default function ObservationsEventsTable({
   const peekContext = usePeekTableState();
   const router = useRouter();
   const { viewId } = router.query;
+  const eventsFilterConfig = useMemo(
+    () => getObservationEventsFilterConfig(omittedFilter),
+    [omittedFilter],
+  );
 
   const { setDetailPageList } = useDetailPageLists();
   const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
@@ -389,7 +396,7 @@ export default function ObservationsEventsTable({
   }, [hideControls, isFilterOptionsPending, peekContext, projectId]);
 
   const queryFilter = useSidebarFilterState(
-    observationEventsFilterConfig,
+    eventsFilterConfig,
     filterOptions,
     queryFilterOptions,
   );
@@ -1049,7 +1056,8 @@ export default function ObservationsEventsTable({
       cell: ({ row }) => {
         const traceTags: string[] | undefined = row.getValue("traceTags");
         return (
-          traceTags && (
+          traceTags &&
+          traceTags.length > 0 && (
             <div
               className={cn(
                 "flex gap-x-2 gap-y-1",
@@ -1188,7 +1196,7 @@ export default function ObservationsEventsTable({
     },
     validationContext: {
       columns,
-      filterColumnDefinition: observationEventsFilterConfig.columnDefinitions,
+      filterColumnDefinition: eventsFilterConfig.columnDefinitions,
     },
     currentFilterState: queryFilter.explicitFilterState,
     disabled: hideControls,
@@ -1243,7 +1251,7 @@ export default function ObservationsEventsTable({
               promptId: observation.promptId ?? undefined,
               promptName: observation.promptName ?? undefined,
               promptVersion: observation.promptVersion?.toString() ?? undefined,
-              traceTags: undefined, // TODO: traceTags not available in EventsObservation
+              traceTags: observation.traceTags ?? undefined,
               traceName: observation.traceName ?? undefined,
               timestamp: observation.startTime ?? undefined,
               usageDetails: observation.usageDetails ?? {},
@@ -1295,9 +1303,7 @@ export default function ObservationsEventsTable({
   }, [selectedObservationIds, observations.rows]);
 
   return (
-    <DataTableControlsProvider
-      tableName={observationEventsFilterConfig.tableName}
-    >
+    <DataTableControlsProvider tableName={eventsFilterConfig.tableName}>
       <div className="flex h-full w-full flex-col">
         {/* Toolbar spanning full width */}
         {!hideControls && (
