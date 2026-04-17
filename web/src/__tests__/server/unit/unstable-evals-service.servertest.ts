@@ -955,6 +955,62 @@ describe("unstable public eval services", () => {
     expect(mockedPrisma.jobConfiguration.update).not.toHaveBeenCalled();
   });
 
+  it("allows unrelated experiment updates without revalidating stale stored dataset filters", async () => {
+    mockFindPublicContinuousEvaluationOrThrow.mockResolvedValueOnce(
+      createContinuousEvaluationRecord({
+        targetObject: EvalTargetObject.EXPERIMENT,
+        filter: [
+          {
+            type: "stringOptions",
+            column: "experimentDatasetId",
+            operator: "any of",
+            value: ["dataset_deleted"],
+          },
+        ],
+      }),
+    );
+    mockLoadEvaluatorForContinuousEvaluation.mockResolvedValueOnce({
+      template: projectTemplate,
+    });
+    mockedPrisma.jobConfiguration.update.mockResolvedValueOnce(
+      createContinuousEvaluationRecord({
+        targetObject: EvalTargetObject.EXPERIMENT,
+        scoreName: "renamed_experiment_answer_quality",
+        filter: [
+          {
+            type: "stringOptions",
+            column: "experimentDatasetId",
+            operator: "any of",
+            value: ["dataset_deleted"],
+          },
+        ],
+      }),
+    );
+
+    const result = await updatePublicContinuousEvaluation({
+      projectId: "project_123",
+      continuousEvaluationId: "ceval_123",
+      input: {
+        name: "renamed_experiment_answer_quality",
+      },
+    });
+
+    expect(mockedPrisma.dataset.findMany).not.toHaveBeenCalled();
+    expect(mockedPrisma.jobConfiguration.update).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      name: "renamed_experiment_answer_quality",
+      target: "experiment",
+      filter: [
+        {
+          type: "stringOptions",
+          column: "datasetId",
+          operator: "any of",
+          value: ["dataset_deleted"],
+        },
+      ],
+    });
+  });
+
   it("does not re-check the active limit for already-active continuous evaluations", async () => {
     mockFindPublicContinuousEvaluationOrThrow.mockResolvedValueOnce(
       createContinuousEvaluationRecord(),

@@ -209,11 +209,13 @@ export async function updatePublicContinuousEvaluation(params: {
     "filter" in params.input && params.input.filter !== undefined
       ? params.input.filter
       : existingPublic.filter;
-  await assertContinuousEvaluationFilterValuesExistForProject({
-    projectId: params.projectId,
-    target: nextTarget,
-    filters: nextFilter,
-  });
+  if ("filter" in params.input && params.input.filter !== undefined) {
+    await assertContinuousEvaluationFilterValuesExistForProject({
+      projectId: params.projectId,
+      target: nextTarget,
+      filters: params.input.filter,
+    });
+  }
   const nextMapping =
     "mapping" in params.input && params.input.mapping !== undefined
       ? params.input.mapping
