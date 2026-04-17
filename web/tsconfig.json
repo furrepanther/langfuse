@@ -15,7 +15,7 @@
       ]
     },
     "strictNullChecks": true,
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
   },
   "exclude": [
     "node_modules",
