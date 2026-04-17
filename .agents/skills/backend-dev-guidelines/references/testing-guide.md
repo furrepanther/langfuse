@@ -31,7 +31,7 @@ Langfuse uses multiple testing strategies for different layers:
 
 Test full REST API endpoints end-to-end using HTTP requests.
 
-**File location:** `web/src/__tests__/async/datasets-api.servertest.ts`
+**File location:** `web/src/__tests__/server/datasets-api.servertest.ts`
 
 ```typescript
 import { makeZodVerifiedAPICall } from "../helpers";
@@ -73,7 +73,7 @@ describe("Dataset API", () => {
 
 Test individual repository/service functions with isolated data.
 
-**File location:** `web/src/__tests__/async/repositories/event-repository.servertest.ts`
+**File location:** `web/src/__tests__/server/repositories/event-repository.servertest.ts`
 
 ```typescript
 import {
@@ -186,7 +186,7 @@ describe("Event Repository Tests", () => {
 
 Test tRPC procedures with caller pattern and auth context.
 
-**File location:** `web/src/__tests__/async/automations-trpc.servertest.ts`
+**File location:** `web/src/__tests__/server/automations-trpc.servertest.ts`
 
 ```typescript
 import { appRouter } from "@/src/server/api/root";
