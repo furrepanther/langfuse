@@ -1,4 +1,8 @@
-import { EvalTargetObject, LangfuseNotFoundError } from "@langfuse/shared";
+import {
+  EvalTargetObject,
+  JobConfigState,
+  LangfuseNotFoundError,
+} from "@langfuse/shared";
 import { Prisma, prisma } from "@langfuse/shared/src/db";
 import type {
   ContinuousEvaluationEvaluatorFamilyReference,
@@ -249,30 +253,22 @@ export async function loadEvaluatorForContinuousEvaluation(params: {
   };
 }
 
-export async function countActivePublicApiContinuousEvaluations(params: {
+export async function countActiveContinuousEvaluations(params: {
   client?: PrismaClientLike;
   projectId: string;
 }) {
   const client = getPrismaClient(params.client);
-  const result = await client.$queryRaw<Array<{ count: bigint }>>(
-    Prisma.sql`
-      SELECT COUNT(DISTINCT jc.id) AS count
-      FROM job_configurations jc
-      INNER JOIN audit_logs al
-        ON al.resource_id = jc.id
-       AND al.resource_type = 'job'
-       AND al.action = 'create'
-       AND al.type = 'API_KEY'
-       AND al.project_id = ${params.projectId}
-      WHERE jc.project_id = ${params.projectId}
-        AND jc.job_type = 'EVAL'
-        AND jc.target_object IN ('event', 'experiment')
-        AND jc.status = 'ACTIVE'
-        AND jc.blocked_at IS NULL
-    `,
-  );
-
-  return result[0] !== undefined ? Number(result[0].count) : 0;
+  return client.jobConfiguration.count({
+    where: {
+      projectId: params.projectId,
+      jobType: "EVAL",
+      targetObject: {
+        in: [EvalTargetObject.EVENT, EvalTargetObject.EXPERIMENT],
+      },
+      status: JobConfigState.ACTIVE,
+      blockedAt: null,
+    },
+  });
 }
 
 export async function listPublicContinuousEvaluationConfigs(params: {

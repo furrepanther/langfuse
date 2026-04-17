@@ -167,7 +167,7 @@ types:
             field: name
       - name: ActiveContinuousEvaluationLimit
         value:
-          message: This project already has the maximum number of active public continuous evaluations (50). Disable an existing public continuous evaluation before enabling another one.
+          message: This project already has the maximum number of active continuous evaluations (50). Disable an existing active continuous evaluation before enabling another one.
           code: conflict
           details:
             limit: 50
@@ -231,12 +231,12 @@ errors:
       Typical unstable-eval examples:
       - evaluator version changed during concurrent creation
       - a continuous evaluation name already exists in the project, so the caller should PATCH the existing resource instead
-      - enabling another public continuous evaluation would exceed the project limit of 50 active public continuous evaluations
+      - enabling another continuous evaluation would exceed the project limit of 50 active continuous evaluations
       - the underlying state changed between read and write operations, so the client should retry
 
       Recovery guidance:
       - for `name_conflict`, PATCH the existing continuous evaluation instead of creating another one
-      - for the active-limit conflict, disable another public continuous evaluation before enabling a new one
+      - for the active-limit conflict, disable another active continuous evaluation before enabling a new one
     status-code: 409
     type: PublicApiError
   UnprocessableContentError:

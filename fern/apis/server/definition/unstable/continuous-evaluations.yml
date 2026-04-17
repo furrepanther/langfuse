@@ -24,13 +24,13 @@ service:
         - every evaluator prompt variable must be mapped exactly once
         - `expected_output` mappings are only valid for `target=experiment`
         - if `enabled=true`, Langfuse validates that the referenced evaluator can currently run
-        - at most 50 public continuous evaluations can be effectively active in one project at the same time
+        - at most 50 continuous evaluations can be effectively active in one project at the same time
 
         If a continuous evaluation with the same `name` already exists in the project, the API returns `409`.
         In that case, update the existing resource with `PATCH /api/public/unstable/continuous-evaluations/{continuousEvaluationId}` instead of creating a second one.
 
         If enabling this resource would exceed the 50-active limit, the API also returns `409`.
-        In that case, disable or pause another public continuous evaluation before enabling a new one.
+        In that case, disable or pause another active continuous evaluation before enabling a new one.
 
         Current scope:
         - continuous evaluations are live-ingestion rules only
@@ -218,7 +218,7 @@ service:
         - changing `target`, `filter`, or `mapping` must still produce a valid target-specific configuration
         - if you change `target`, also send a compatible `filter` and `mapping` in the same request unless the existing ones are still valid for the new target
         - if the resulting config is enabled, Langfuse re-validates that the selected evaluator can run
-        - if the update would move a non-active public continuous evaluation into the active state and the project already has 50 active public continuous evaluations, the API returns `409`
+        - if the update would move a non-active continuous evaluation into the active state and the project already has 50 active continuous evaluations, the API returns `409`
 
         Recovery guidance:
         - if the update fails with `missing_variable_mapping` or `invalid_variable_mapping` after changing `evaluator` or `target`, resend the request with a complete new `mapping`

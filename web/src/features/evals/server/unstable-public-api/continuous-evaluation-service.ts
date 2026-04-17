@@ -11,7 +11,7 @@ import {
   toJobConfigurationInput,
 } from "./adapters";
 import {
-  countActivePublicApiContinuousEvaluations,
+  countActiveContinuousEvaluations,
   findPublicContinuousEvaluationOrThrow,
   listPublicContinuousEvaluationConfigs,
   loadEvaluatorForContinuousEvaluation,
@@ -19,22 +19,20 @@ import {
 import { assertEvaluatorDefinitionCanRunForPublicApi } from "./validation";
 import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
 
-const MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS = 50;
+const MAX_ACTIVE_CONTINUOUS_EVALUATIONS = 50;
 
 async function assertActivePublicApiContinuousEvaluationLimitNotExceeded(
   projectId: string,
 ) {
-  const activeCount = await countActivePublicApiContinuousEvaluations({
-    projectId,
-  });
+  const activeCount = await countActiveContinuousEvaluations({ projectId });
 
-  if (activeCount >= MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS) {
+  if (activeCount >= MAX_ACTIVE_CONTINUOUS_EVALUATIONS) {
     throw createUnstablePublicApiError({
       httpCode: 409,
       code: "conflict",
-      message: `This project already has the maximum number of active public continuous evaluations (${MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS}). Disable an existing public continuous evaluation before enabling another one.`,
+      message: `This project already has the maximum number of active continuous evaluations (${MAX_ACTIVE_CONTINUOUS_EVALUATIONS}). Disable an existing active continuous evaluation before enabling another one.`,
       details: {
-        limit: MAX_ACTIVE_PUBLIC_API_CONTINUOUS_EVALUATIONS,
+        limit: MAX_ACTIVE_CONTINUOUS_EVALUATIONS,
       },
     });
   }

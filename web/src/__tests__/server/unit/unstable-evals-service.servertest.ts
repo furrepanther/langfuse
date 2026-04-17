@@ -20,7 +20,7 @@ jest.mock(
 );
 
 jest.mock("../../../features/evals/server/unstable-public-api/queries", () => ({
-  countActivePublicApiContinuousEvaluations: jest.fn(),
+  countActiveContinuousEvaluations: jest.fn(),
   findPublicEvaluatorTemplateOrThrow: jest.fn(),
   countContinuousEvaluationsForEvaluator: jest.fn(),
   countContinuousEvaluationsForEvaluatorIds: jest.fn(),
@@ -143,8 +143,8 @@ const mockAssertEvaluatorDefinitionCanRunForPublicApi = jest.mocked(
 const mockLoadEvaluatorForContinuousEvaluation = jest.mocked(
   queryModule.loadEvaluatorForContinuousEvaluation,
 );
-const mockCountActivePublicApiContinuousEvaluations = jest.mocked(
-  queryModule.countActivePublicApiContinuousEvaluations,
+const mockCountActiveContinuousEvaluations = jest.mocked(
+  queryModule.countActiveContinuousEvaluations,
 );
 const mockFindPublicContinuousEvaluationOrThrow = jest.mocked(
   queryModule.findPublicContinuousEvaluationOrThrow,
@@ -590,8 +590,8 @@ describe("unstable public eval services", () => {
     expect(mockedPrisma.jobConfiguration.create).not.toHaveBeenCalled();
   });
 
-  it("rejects creating more than 50 active public continuous evaluations", async () => {
-    mockCountActivePublicApiContinuousEvaluations.mockResolvedValueOnce(50);
+  it("rejects creating more than 50 active continuous evaluations", async () => {
+    mockCountActiveContinuousEvaluations.mockResolvedValueOnce(50);
 
     await expect(
       createPublicContinuousEvaluation({
@@ -610,7 +610,7 @@ describe("unstable public eval services", () => {
         },
       }),
     ).rejects.toThrow(
-      "This project already has the maximum number of active public continuous evaluations (50).",
+      "This project already has the maximum number of active continuous evaluations (50).",
     );
 
     expect(mockLoadEvaluatorForContinuousEvaluation).not.toHaveBeenCalled();
@@ -833,13 +833,13 @@ describe("unstable public eval services", () => {
     });
   });
 
-  it("rejects enabling a non-active continuous evaluation when the public API active limit is reached", async () => {
+  it("rejects enabling a non-active continuous evaluation when the active limit is reached", async () => {
     mockFindPublicContinuousEvaluationOrThrow.mockResolvedValueOnce(
       createContinuousEvaluationRecord({
         status: JobConfigState.INACTIVE,
       }),
     );
-    mockCountActivePublicApiContinuousEvaluations.mockResolvedValueOnce(50);
+    mockCountActiveContinuousEvaluations.mockResolvedValueOnce(50);
 
     await expect(
       updatePublicContinuousEvaluation({
@@ -850,7 +850,7 @@ describe("unstable public eval services", () => {
         },
       }),
     ).rejects.toThrow(
-      "This project already has the maximum number of active public continuous evaluations (50).",
+      "This project already has the maximum number of active continuous evaluations (50).",
     );
 
     expect(mockLoadEvaluatorForContinuousEvaluation).not.toHaveBeenCalled();
@@ -878,9 +878,7 @@ describe("unstable public eval services", () => {
       },
     });
 
-    expect(
-      mockCountActivePublicApiContinuousEvaluations,
-    ).not.toHaveBeenCalled();
+    expect(mockCountActiveContinuousEvaluations).not.toHaveBeenCalled();
     expect(mockedPrisma.jobConfiguration.update).toHaveBeenCalled();
   });
 });

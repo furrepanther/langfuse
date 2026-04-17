@@ -15,6 +15,7 @@ jest.mock("@langfuse/shared/src/db", () => {
         findFirst: jest.fn(),
       },
       jobConfiguration: {
+        count: jest.fn(),
         groupBy: jest.fn(),
       },
     },
@@ -23,7 +24,7 @@ jest.mock("@langfuse/shared/src/db", () => {
 
 import { prisma } from "@langfuse/shared/src/db";
 import {
-  countActivePublicApiContinuousEvaluations,
+  countActiveContinuousEvaluations,
   countContinuousEvaluationsForEvaluatorIds,
   loadEvaluatorForContinuousEvaluation,
   listPublicEvaluatorTemplates,
@@ -32,6 +33,7 @@ import {
 const mockQueryRaw = prisma.$queryRaw as jest.Mock;
 const mockEvalTemplateFindMany = prisma.evalTemplate.findMany as jest.Mock;
 const mockEvalTemplateFindFirst = prisma.evalTemplate.findFirst as jest.Mock;
+const mockJobConfigurationCount = prisma.jobConfiguration.count as jest.Mock;
 const mockJobConfigurationGroupBy = prisma.jobConfiguration
   .groupBy as jest.Mock;
 
@@ -131,14 +133,24 @@ describe("unstable public eval queries", () => {
     });
   });
 
-  it("counts only active public-api-created continuous evaluations", async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ count: 17n }]);
+  it("counts all active continuous evaluations in the project", async () => {
+    mockJobConfigurationCount.mockResolvedValueOnce(17);
 
-    const result = await countActivePublicApiContinuousEvaluations({
+    const result = await countActiveContinuousEvaluations({
       projectId: "project_123",
     });
 
-    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+    expect(mockJobConfigurationCount).toHaveBeenCalledWith({
+      where: {
+        projectId: "project_123",
+        jobType: "EVAL",
+        targetObject: {
+          in: ["event", "experiment"],
+        },
+        status: "ACTIVE",
+        blockedAt: null,
+      },
+    });
     expect(result).toBe(17);
   });
 
