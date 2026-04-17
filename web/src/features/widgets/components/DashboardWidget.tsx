@@ -239,6 +239,15 @@ export function DashboardWidget({
     [widget.data?.view, widget.data?.metrics, metricsVersion],
   );
 
+  const valueFormatter = useMemo(() => {
+    switch (measureUnit) {
+      case "millisecond":
+        return latencyFormatter;
+      default:
+        return undefined;
+    }
+  }, [measureUnit]);
+
   const transformedData = useMemo(() => {
     if (!widget.data || !queryResult.data) {
       return [];
@@ -445,9 +454,7 @@ export function DashboardWidget({
                 widget.data.chartType === "PIVOT_TABLE" ? updateSort : undefined
               }
               isLoading={queryResult.isPending}
-              valueFormatter={
-                measureUnit === "millisecond" ? latencyFormatter : undefined
-              }
+              valueFormatter={valueFormatter}
             />
             <ChartLoadingState
               isLoading={chartLoadingState.isLoading}
