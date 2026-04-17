@@ -46,15 +46,49 @@ export const numberFormatter = (
   }).format(number ?? 0);
 };
 
-export const latencyFormatter = (milliseconds?: number) => {
+// prepareTimeDurationFormatter switches between ms, s, hr and days intellegently.
+const prepareTimeDurationFormatter = (
+  milliseconds: number | bigint,
+): [Intl.NumberFormat, number] => {
+  const ms = Number(milliseconds);
+  const tier =
+    +(ms >= 1_000) + +(ms >= 60_000) + +(ms >= 3_600_000) + +(ms >= 86_400_000);
+  const divisors = [1, 1_000, 60_000, 3_600_000, 86_400_000] as const;
+  const units = ["millisecond", "second", "minute", "hour", "day"] as const;
+  return [
+    Intl.NumberFormat("en-US", {
+      style: "unit",
+      unit: units[tier]!,
+      unitDisplay: "narrow",
+      notation: "compact",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
+    ms / divisors[tier]!,
+  ];
+};
+
+export const latencyFormatter = (milliseconds?: number): string => {
+  const [fmt, value] = prepareTimeDurationFormatter(milliseconds ?? 0);
+  return fmt.format(value ?? 0);
+};
+
+export const latencyFormatterParts = (
+  milliseconds?: number,
+): Intl.NumberFormatPart[] => {
+  const [fmt, value] = prepareTimeDurationFormatter(milliseconds ?? 0);
+  return fmt.formatToParts(value);
+};
+
+export const compactNumberFormatterParts = (
+  number?: number | bigint,
+  maxFractionDigits?: number,
+) => {
   return Intl.NumberFormat("en-US", {
-    style: "unit",
-    unit: "second",
-    unitDisplay: "narrow",
     notation: "compact",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format((milliseconds ?? 0) / 1000);
+    compactDisplay: "short",
+    maximumFractionDigits: maxFractionDigits ?? 2,
+  }).formatToParts(number ?? 0);
 };
 
 export const usdFormatter = (
