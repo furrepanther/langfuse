@@ -6129,11 +6129,11 @@ paths:
 
         - `target` must be `observation` or `experiment`
 
-        - `evaluatorId` must reference an existing evaluator returned by the
-        evaluator endpoints
+        - `evaluator.name` + `evaluator.scope` must identify an existing
+        evaluator family returned by the evaluator endpoints
 
-        - Langfuse resolves `evaluatorId` to the latest version of that
-        evaluator before saving the continuous evaluation
+        - Langfuse resolves that family to its latest version before saving the
+        continuous evaluation
 
         - every evaluator prompt variable must be mapped exactly once
 
@@ -6203,7 +6203,10 @@ paths:
                   value:
                     id: ceval_123
                     name: answer-correctness-live
-                    evaluatorId: evaltmpl_123
+                    evaluator:
+                      id: evaltmpl_123
+                      name: answer-correctness
+                      scope: project
                     target: observation
                     enabled: true
                     status: active
@@ -6225,7 +6228,10 @@ paths:
                   value:
                     id: ceval_456
                     name: experiment-expected-output-match
-                    evaluatorId: evaltmpl_456
+                    evaluator:
+                      id: evaltmpl_456
+                      name: expected-output-match
+                      scope: project
                     target: experiment
                     enabled: true
                     status: active
@@ -6304,7 +6310,9 @@ paths:
               CreateObservationContinuousEvaluation:
                 value:
                   name: answer-correctness-live
-                  evaluatorId: evaltmpl_123
+                  evaluator:
+                    name: answer-correctness
+                    scope: project
                   target: observation
                   enabled: true
                   sampling: 1
@@ -6322,7 +6330,9 @@ paths:
               CreateExperimentContinuousEvaluation:
                 value:
                   name: experiment-expected-output-match
-                  evaluatorId: evaltmpl_456
+                  evaluator:
+                    name: expected-output-match
+                    scope: project
                   target: experiment
                   enabled: true
                   sampling: 0.5
@@ -6496,8 +6506,8 @@ paths:
 
         - provide only the fields you want to change
 
-        - if you provide `evaluatorId`, Langfuse resolves it to the latest
-        version of that evaluator before saving
+        - if you provide `evaluator`, Langfuse resolves that evaluator family to
+        its latest version before saving
 
         - changing `target`, `filter`, or `mapping` must still produce a valid
         target-specific configuration
@@ -6517,7 +6527,7 @@ paths:
         Recovery guidance:
 
         - if the update fails with `missing_variable_mapping` or
-        `invalid_variable_mapping` after changing `evaluatorId` or `target`,
+        `invalid_variable_mapping` after changing `evaluator` or `target`,
         resend the request with a complete new `mapping`
 
         - if the update fails with `invalid_filter_value` after changing
@@ -6687,7 +6697,7 @@ paths:
         whether future scores will be numeric, boolean, or categorical.
 
         4. Create one or more continuous evaluations that reference the returned
-        `id`.
+        evaluator family using `name` and `scope`.
 
 
         Recovery guidance:
@@ -12769,18 +12779,19 @@ components:
             Human-readable deployment name. This is independent from the
             evaluator name.
           example: answer-correctness-live
-        evaluatorId:
-          type: string
+        evaluator:
+          $ref: '#/components/schemas/unstableContinuousEvaluationEvaluator'
           description: >-
-            Identifier of the evaluator this rule uses.
+            Evaluator currently used by this rule.
 
 
-            Langfuse keeps the rule on the latest version of that evaluator.
+            `name` and `scope` identify the evaluator family conceptually.
+
+            `id` is the currently active evaluator version in that family.
 
             If you create a newer project version with the same evaluator name
             later, existing continuous evaluations are moved to it
             automatically.
-          example: evaltmpl_123
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
           description: Target object type that should trigger scoring.
@@ -12838,7 +12849,7 @@ components:
       required:
         - id
         - name
-        - evaluatorId
+        - evaluator
         - target
         - enabled
         - status
@@ -12872,7 +12883,8 @@ components:
 
         Checklist for agents and SDK clients:
 
-        - reference an existing evaluator `id`
+        - reference an existing evaluator family by `evaluator.name` and
+        `evaluator.scope`
 
         - choose `target=observation` or `target=experiment`
 
@@ -12887,15 +12899,16 @@ components:
           type: string
           description: Human-readable deployment name.
           example: answer-correctness-live
-        evaluatorId:
-          type: string
+        evaluator:
+          $ref: '#/components/schemas/unstableContinuousEvaluationEvaluatorReference'
           description: >-
-            Identifier of the evaluator to use.
+            Evaluator family to use.
 
 
-            You can pass any version returned by the evaluator endpoints.
-            Langfuse resolves it to the latest version before saving the rule.
-          example: evaltmpl_123
+            Use `name` and `scope` from the evaluator endpoints.
+
+            Langfuse resolves that family to its latest version before saving
+            the rule.
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
           description: Target object type to evaluate.
@@ -12936,7 +12949,7 @@ components:
             evaluator endpoints.
       required:
         - name
-        - evaluatorId
+        - evaluator
         - target
         - enabled
         - mapping
@@ -12957,7 +12970,7 @@ components:
         - If you only want to rename the rule or change sampling, send just
         those fields.
 
-        - If you change `evaluatorId`, send a fresh `mapping` unless you are
+        - If you change `evaluator`, send a fresh `mapping` unless you are
         certain the existing mapping still matches the evaluator variables.
 
         - If you change `target`, usually send both `filter` and `mapping` in
@@ -12967,15 +12980,15 @@ components:
           type: string
           nullable: true
           description: Updated deployment name.
-        evaluatorId:
-          type: string
+        evaluator:
+          $ref: '#/components/schemas/unstableContinuousEvaluationEvaluatorReference'
           nullable: true
           description: >-
-            Updated evaluator identifier.
+            Updated evaluator family.
 
 
-            Langfuse resolves the provided evaluator to its latest version
-            before saving the rule.
+            Langfuse resolves the provided evaluator family to its latest
+            version before saving the rule.
         target:
           $ref: '#/components/schemas/unstableContinuousEvaluationTarget'
           nullable: true
@@ -13011,6 +13024,50 @@ components:
           description: Always `Continuous evaluation successfully deleted`.
       required:
         - message
+    unstableContinuousEvaluationEvaluatorReference:
+      title: unstableContinuousEvaluationEvaluatorReference
+      type: object
+      description: >-
+        Evaluator family reference used when creating or updating a continuous
+        evaluation.
+
+
+        `name` and `scope` are enough to identify the evaluator family in the
+        authenticated project context.
+      properties:
+        name:
+          type: string
+          description: Evaluator family name.
+        scope:
+          $ref: '#/components/schemas/unstableEvaluatorScope'
+          description: Whether the evaluator family is project-owned or Langfuse-managed.
+      required:
+        - name
+        - scope
+    unstableContinuousEvaluationEvaluator:
+      title: unstableContinuousEvaluationEvaluator
+      type: object
+      description: |-
+        Resolved evaluator currently used by the continuous evaluation.
+
+        `id` is the exact active evaluator version.
+        `name` and `scope` identify the evaluator family conceptually.
+      properties:
+        id:
+          type: string
+          description: >-
+            Identifier of the exact evaluator version currently used by the
+            rule.
+        name:
+          type: string
+          description: Evaluator family name.
+        scope:
+          $ref: '#/components/schemas/unstableEvaluatorScope'
+          description: Whether the evaluator family is project-owned or Langfuse-managed.
+      required:
+        - id
+        - name
+        - scope
     unstablePublicApiErrorCode:
       title: unstablePublicApiErrorCode
       type: string

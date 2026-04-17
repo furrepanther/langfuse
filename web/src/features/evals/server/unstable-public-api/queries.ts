@@ -1,6 +1,7 @@
 import { EvalTargetObject, LangfuseNotFoundError } from "@langfuse/shared";
 import { Prisma, prisma } from "@langfuse/shared/src/db";
 import type {
+  ContinuousEvaluationEvaluatorFamilyReference,
   PrismaClientLike,
   StoredPublicContinuousEvaluationConfig,
   StoredPublicEvaluatorTemplate,
@@ -38,15 +39,13 @@ export async function findPublicEvaluatorTemplateOrThrow(params: {
 export async function findLatestPublicEvaluatorTemplateInFamilyOrThrow(params: {
   client?: PrismaClientLike;
   projectId: string;
-  evaluatorId: string;
+  evaluator: ContinuousEvaluationEvaluatorFamilyReference;
 }) {
   const client = getPrismaClient(params.client);
-  const template = await findPublicEvaluatorTemplateOrThrow(params);
-
   const latestTemplate = await client.evalTemplate.findFirst({
     where: {
-      name: template.name,
-      projectId: template.projectId,
+      name: params.evaluator.name,
+      projectId: params.evaluator.scope === "project" ? params.projectId : null,
     },
     orderBy: {
       version: "desc",
@@ -240,7 +239,7 @@ export async function findPublicContinuousEvaluationOrThrow(params: {
 export async function loadEvaluatorForContinuousEvaluation(params: {
   client?: PrismaClientLike;
   projectId: string;
-  evaluatorId: string;
+  evaluator: ContinuousEvaluationEvaluatorFamilyReference;
 }) {
   const template =
     await findLatestPublicEvaluatorTemplateInFamilyOrThrow(params);

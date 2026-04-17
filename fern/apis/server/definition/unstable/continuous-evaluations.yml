@@ -19,8 +19,8 @@ service:
         Key rules:
         - `name` must be unique within the project for public continuous evaluations
         - `target` must be `observation` or `experiment`
-        - `evaluatorId` must reference an existing evaluator returned by the evaluator endpoints
-        - Langfuse resolves `evaluatorId` to the latest version of that evaluator before saving the continuous evaluation
+        - `evaluator.name` + `evaluator.scope` must identify an existing evaluator family returned by the evaluator endpoints
+        - Langfuse resolves that family to its latest version before saving the continuous evaluation
         - every evaluator prompt variable must be mapped exactly once
         - `expected_output` mappings are only valid for `target=experiment`
         - if `enabled=true`, Langfuse validates that the referenced evaluator can currently run
@@ -62,7 +62,9 @@ service:
           docs: Deploy an evaluator to score live generations only.
           request:
             name: answer-correctness-live
-            evaluatorId: evaltmpl_123
+            evaluator:
+              name: answer-correctness
+              scope: project
             target: observation
             enabled: true
             sampling: 1
@@ -81,7 +83,10 @@ service:
             body:
               id: ceval_123
               name: answer-correctness-live
-              evaluatorId: evaltmpl_123
+              evaluator:
+                id: evaltmpl_123
+                name: answer-correctness
+                scope: project
               target: observation
               enabled: true
               status: active
@@ -105,7 +110,9 @@ service:
           docs: Deploy an evaluator to compare experiment outputs against expected outputs.
           request:
             name: experiment-expected-output-match
-            evaluatorId: evaltmpl_456
+            evaluator:
+              name: expected-output-match
+              scope: project
             target: experiment
             enabled: true
             sampling: 0.5
@@ -124,7 +131,10 @@ service:
             body:
               id: ceval_456
               name: experiment-expected-output-match
-              evaluatorId: evaltmpl_456
+              evaluator:
+                id: evaltmpl_456
+                name: expected-output-match
+                scope: project
               target: experiment
               enabled: true
               status: active
@@ -204,14 +214,14 @@ service:
 
         Important behavior:
         - provide only the fields you want to change
-        - if you provide `evaluatorId`, Langfuse resolves it to the latest version of that evaluator before saving
+        - if you provide `evaluator`, Langfuse resolves that evaluator family to its latest version before saving
         - changing `target`, `filter`, or `mapping` must still produce a valid target-specific configuration
         - if you change `target`, also send a compatible `filter` and `mapping` in the same request unless the existing ones are still valid for the new target
         - if the resulting config is enabled, Langfuse re-validates that the selected evaluator can run
         - if the update would move a non-active public continuous evaluation into the active state and the project already has 50 active public continuous evaluations, the API returns `409`
 
         Recovery guidance:
-        - if the update fails with `missing_variable_mapping` or `invalid_variable_mapping` after changing `evaluatorId` or `target`, resend the request with a complete new `mapping`
+        - if the update fails with `missing_variable_mapping` or `invalid_variable_mapping` after changing `evaluator` or `target`, resend the request with a complete new `mapping`
         - if the update fails with `invalid_filter_value` after changing `target`, resend the request with a target-compatible `filter`
       method: PATCH
       path: /continuous-evaluations/{continuousEvaluationId}
@@ -275,12 +285,13 @@ types:
       name:
         type: string
         docs: Human-readable deployment name. This is independent from the evaluator name.
-      evaluatorId:
-        type: string
+      evaluator:
+        type: ContinuousEvaluationEvaluator
         docs: |
-          Identifier of the evaluator this rule uses.
+          Evaluator currently used by this rule.
 
-          Langfuse keeps the rule on the latest version of that evaluator.
+          `name` and `scope` identify the evaluator family conceptually.
+          `id` is the currently active evaluator version in that family.
           If you create a newer project version with the same evaluator name later, existing continuous evaluations are moved to it automatically.
       target:
         type: commons.ContinuousEvaluationTarget
@@ -321,7 +332,10 @@ types:
       - value:
           id: ceval_123
           name: answer-correctness-live
-          evaluatorId: evaltmpl_123
+          evaluator:
+            id: evaltmpl_123
+            name: answer-correctness
+            scope: project
           target: observation
           enabled: true
           status: active
@@ -357,7 +371,7 @@ types:
       Request body for creating a continuous evaluation.
 
       Checklist for agents and SDK clients:
-      - reference an existing evaluator `id`
+      - reference an existing evaluator family by `evaluator.name` and `evaluator.scope`
       - choose `target=observation` or `target=experiment`
       - fetch or inspect the evaluator first, then provide a complete variable mapping for every evaluator variable listed in `variables`
       - optionally narrow execution with `filter`
@@ -366,12 +380,13 @@ types:
       name:
         type: string
         docs: Human-readable deployment name.
-      evaluatorId:
-        type: string
+      evaluator:
+        type: ContinuousEvaluationEvaluatorReference
         docs: |
-          Identifier of the evaluator to use.
+          Evaluator family to use.
 
-          You can pass any version returned by the evaluator endpoints. Langfuse resolves it to the latest version before saving the rule.
+          Use `name` and `scope` from the evaluator endpoints.
+          Langfuse resolves that family to its latest version before saving the rule.
       target:
         type: commons.ContinuousEvaluationTarget
         docs: Target object type to evaluate.
@@ -405,18 +420,18 @@ types:
 
       Practical guidance:
       - If you only want to rename the rule or change sampling, send just those fields.
-      - If you change `evaluatorId`, send a fresh `mapping` unless you are certain the existing mapping still matches the evaluator variables.
+      - If you change `evaluator`, send a fresh `mapping` unless you are certain the existing mapping still matches the evaluator variables.
       - If you change `target`, usually send both `filter` and `mapping` in the same request.
     properties:
       name:
         type: optional<string>
         docs: Updated deployment name.
-      evaluatorId:
-        type: optional<string>
+      evaluator:
+        type: optional<ContinuousEvaluationEvaluatorReference>
         docs: |
-          Updated evaluator identifier.
+          Updated evaluator family.
 
-          Langfuse resolves the provided evaluator to its latest version before saving the rule.
+          Langfuse resolves the provided evaluator family to its latest version before saving the rule.
       target:
         type: optional<commons.ContinuousEvaluationTarget>
         docs: Updated target object type.
@@ -439,3 +454,33 @@ types:
       message:
         type: string
         docs: Always `Continuous evaluation successfully deleted`.
+
+  ContinuousEvaluationEvaluatorReference:
+    docs: |
+      Evaluator family reference used when creating or updating a continuous evaluation.
+
+      `name` and `scope` are enough to identify the evaluator family in the authenticated project context.
+    properties:
+      name:
+        type: string
+        docs: Evaluator family name.
+      scope:
+        type: commons.EvaluatorScope
+        docs: Whether the evaluator family is project-owned or Langfuse-managed.
+
+  ContinuousEvaluationEvaluator:
+    docs: |
+      Resolved evaluator currently used by the continuous evaluation.
+
+      `id` is the exact active evaluator version.
+      `name` and `scope` identify the evaluator family conceptually.
+    properties:
+      id:
+        type: string
+        docs: Identifier of the exact evaluator version currently used by the rule.
+      name:
+        type: string
+        docs: Evaluator family name.
+      scope:
+        type: commons.EvaluatorScope
+        docs: Whether the evaluator family is project-owned or Langfuse-managed.

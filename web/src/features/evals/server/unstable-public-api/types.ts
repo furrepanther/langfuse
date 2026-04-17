@@ -5,6 +5,8 @@ import type {
   prisma,
 } from "@langfuse/shared/src/db";
 import type {
+  PublicContinuousEvaluationEvaluatorReferenceType,
+  PublicContinuousEvaluationEvaluatorType,
   PublicContinuousEvaluationFilterType,
   PublicContinuousEvaluationMappingType,
   PublicContinuousEvaluationStatusType,
@@ -36,7 +38,7 @@ export type ApiEvaluatorRecord = {
 export type ApiContinuousEvaluationRecord = {
   id: string;
   name: string;
-  evaluatorId: string;
+  evaluator: PublicContinuousEvaluationEvaluatorType;
   target: PublicContinuousEvaluationTargetType;
   enabled: boolean;
   status: PublicContinuousEvaluationStatusType;
@@ -48,6 +50,9 @@ export type ApiContinuousEvaluationRecord = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+export type ContinuousEvaluationEvaluatorFamilyReference =
+  PublicContinuousEvaluationEvaluatorReferenceType;
 
 export type StoredPublicEvaluatorTemplate = Pick<
   EvalTemplate,

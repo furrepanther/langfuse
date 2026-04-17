@@ -104,7 +104,7 @@ export async function createPublicContinuousEvaluation(params: {
 
   const { template } = await loadEvaluatorForContinuousEvaluation({
     projectId: params.projectId,
-    evaluatorId: params.input.evaluatorId,
+    evaluator: params.input.evaluator,
   });
 
   const data = toJobConfigurationInput({
@@ -186,11 +186,13 @@ export async function updatePublicContinuousEvaluation(params: {
     );
   }
 
-  const nextEvaluatorId =
-    params.input.evaluatorId ?? existingPublic.evaluatorId;
+  const nextEvaluator = params.input.evaluator ?? {
+    name: existingPublic.evaluator.name,
+    scope: existingPublic.evaluator.scope,
+  };
   const { template } = await loadEvaluatorForContinuousEvaluation({
     projectId: params.projectId,
-    evaluatorId: nextEvaluatorId,
+    evaluator: nextEvaluator,
   });
   const nextTarget =
     "target" in params.input && params.input.target !== undefined

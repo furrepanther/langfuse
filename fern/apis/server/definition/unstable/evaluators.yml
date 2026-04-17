@@ -23,7 +23,7 @@ service:
         1. Create the evaluator.
         2. Read the returned `variables` array.
         3. Read the returned `outputDefinition.dataType` so the client knows whether future scores will be numeric, boolean, or categorical.
-        4. Create one or more continuous evaluations that reference the returned `id`.
+        4. Create one or more continuous evaluations that reference the returned evaluator family using `name` and `scope`.
 
         Recovery guidance:
         - `422` with `code=evaluator_preflight_failed`: the evaluator cannot run with the resolved model configuration. Add a valid explicit `modelConfig`, or configure the project's default evaluation model, then retry the same request.

@@ -80,6 +80,16 @@ export const PublicContinuousEvaluationStatus = z.enum([
   "paused",
 ]);
 
+export const PublicContinuousEvaluationEvaluatorReference = z.object({
+  name: z.string().min(1),
+  scope: PublicEvaluatorScope,
+});
+
+export const PublicContinuousEvaluationEvaluator =
+  PublicContinuousEvaluationEvaluatorReference.extend({
+    id: z.string(),
+  });
+
 export const ObservationContinuousEvaluationMappingSource = z.enum([
   "input",
   "output",
@@ -201,6 +211,12 @@ export type PublicContinuousEvaluationTargetType = z.infer<
 >;
 export type PublicContinuousEvaluationStatusType = z.infer<
   typeof PublicContinuousEvaluationStatus
+>;
+export type PublicContinuousEvaluationEvaluatorReferenceType = z.infer<
+  typeof PublicContinuousEvaluationEvaluatorReference
+>;
+export type PublicContinuousEvaluationEvaluatorType = z.infer<
+  typeof PublicContinuousEvaluationEvaluator
 >;
 export type PublicContinuousEvaluationMappingType = z.infer<
   typeof PublicContinuousEvaluationMapping

@@ -113,7 +113,10 @@ describe("unstable public eval contracts", () => {
   it("rejects observation continuous evaluations that use expected_output mappings", () => {
     const parsed = PostUnstableContinuousEvaluationBody.safeParse({
       name: "answer_quality",
-      evaluatorId: "tmpl_123",
+      evaluator: {
+        name: "Answer correctness",
+        scope: "project",
+      },
       target: "observation",
       enabled: true,
       sampling: 1,
@@ -564,7 +567,11 @@ describe("unstable public eval adapters", () => {
     };
 
     expect(toApiContinuousEvaluation(config)).toMatchObject({
-      evaluatorId: "tmpl_exact",
+      evaluator: {
+        id: "tmpl_exact",
+        name: "Answer correctness",
+        scope: "project",
+      },
       target: "observation",
       enabled: true,
       status: "active",

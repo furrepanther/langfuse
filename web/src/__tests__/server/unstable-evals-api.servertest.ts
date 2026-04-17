@@ -133,7 +133,7 @@ describe("/api/public/unstable evaluators API", () => {
   });
 
   it("creates exact evaluator versions and lists only the latest project version per family", async () => {
-    const v1 = await makeZodVerifiedAPICall(
+    await makeZodVerifiedAPICall(
       PostUnstableEvaluatorResponse,
       "POST",
       "/api/public/unstable/evaluators",
@@ -217,7 +217,7 @@ describe("/api/public/unstable evaluators API", () => {
   });
 
   it("automatically moves existing continuous evaluations to the newest project evaluator version", async () => {
-    const v1 = await makeZodVerifiedAPICall(
+    await makeZodVerifiedAPICall(
       PostUnstableEvaluatorResponse,
       "POST",
       "/api/public/unstable/evaluators",
@@ -235,7 +235,10 @@ describe("/api/public/unstable evaluators API", () => {
       "/api/public/unstable/continuous-evaluations",
       {
         name: "faithfulness-live",
-        evaluatorId: v1.body.id,
+        evaluator: {
+          name: "Faithfulness",
+          scope: "project",
+        },
         target: "observation",
         enabled: true,
         sampling: 1,
@@ -269,11 +272,15 @@ describe("/api/public/unstable evaluators API", () => {
     );
 
     expect(v2.body.version).toBe(2);
-    expect(fetched.body.evaluatorId).toBe(v2.body.id);
+    expect(fetched.body.evaluator).toEqual({
+      id: v2.body.id,
+      name: "Faithfulness",
+      scope: "project",
+    });
   });
 
-  it("resolves older project evaluator ids to the latest version when creating a continuous evaluation", async () => {
-    const v1 = await makeZodVerifiedAPICall(
+  it("resolves project evaluator families to the latest version when creating a continuous evaluation", async () => {
+    await makeZodVerifiedAPICall(
       PostUnstableEvaluatorResponse,
       "POST",
       "/api/public/unstable/evaluators",
@@ -303,7 +310,10 @@ describe("/api/public/unstable evaluators API", () => {
       "/api/public/unstable/continuous-evaluations",
       {
         name: "answer_groundedness_live",
-        evaluatorId: v1.body.id,
+        evaluator: {
+          name: "Answer groundedness",
+          scope: "project",
+        },
         target: "observation",
         enabled: true,
         sampling: 1,
@@ -316,7 +326,11 @@ describe("/api/public/unstable evaluators API", () => {
       auth,
     );
 
-    expect(created.body.evaluatorId).toBe(v2.body.id);
+    expect(created.body.evaluator).toEqual({
+      id: v2.body.id,
+      name: "Answer groundedness",
+      scope: "project",
+    });
   });
 
   it("lists managed and project evaluator families separately when names overlap", async () => {
@@ -377,7 +391,10 @@ describe("/api/public/unstable evaluators API", () => {
       "/api/public/unstable/continuous-evaluations",
       {
         name: "answer_relevance_managed",
-        evaluatorId: managed.id,
+        evaluator: {
+          name: "Answer relevance",
+          scope: "managed",
+        },
         target: "observation",
         enabled: true,
         sampling: 1,
@@ -391,7 +408,11 @@ describe("/api/public/unstable evaluators API", () => {
     );
 
     expect(created.body).toMatchObject({
-      evaluatorId: managed.id,
+      evaluator: {
+        id: managed.id,
+        name: "Answer relevance",
+        scope: "managed",
+      },
       target: "observation",
       enabled: true,
       status: "active",
@@ -405,7 +426,11 @@ describe("/api/public/unstable evaluators API", () => {
       auth,
     );
 
-    expect(fetched.body.evaluatorId).toBe(managed.id);
+    expect(fetched.body.evaluator).toEqual({
+      id: managed.id,
+      name: "Answer relevance",
+      scope: "managed",
+    });
 
     const deleted = await makeZodVerifiedAPICall(
       DeleteUnstableContinuousEvaluationResponse,

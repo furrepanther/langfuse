@@ -494,7 +494,10 @@ describe("unstable public eval services", () => {
       projectId: "project_123",
       input: {
         name: "answer_quality_latest",
-        evaluatorId: "tmpl_project_v1",
+        evaluator: {
+          name: "Answer correctness",
+          scope: "project",
+        },
         target: "observation",
         enabled: true,
         sampling: 1,
@@ -505,7 +508,10 @@ describe("unstable public eval services", () => {
 
     expect(mockLoadEvaluatorForContinuousEvaluation).toHaveBeenCalledWith({
       projectId: "project_123",
-      evaluatorId: "tmpl_project_v1",
+      evaluator: {
+        name: "Answer correctness",
+        scope: "project",
+      },
     });
     expect(mockedPrisma.jobConfiguration.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -514,7 +520,11 @@ describe("unstable public eval services", () => {
       include: expect.any(Object),
     });
     expect(result).toMatchObject({
-      evaluatorId: "tmpl_project_v3",
+      evaluator: {
+        id: "tmpl_project_v3",
+        name: "Answer correctness",
+        scope: "project",
+      },
     });
   });
 
@@ -535,7 +545,10 @@ describe("unstable public eval services", () => {
         projectId: "project_123",
         input: {
           name: "answer_quality",
-          evaluatorId: "tmpl_project_v2",
+          evaluator: {
+            name: "Answer correctness",
+            scope: "project",
+          },
           target: "observation",
           enabled: true,
           sampling: 1,
@@ -558,7 +571,10 @@ describe("unstable public eval services", () => {
         projectId: "project_123",
         input: {
           name: "answer_quality",
-          evaluatorId: "tmpl_project_v2",
+          evaluator: {
+            name: "Answer correctness",
+            scope: "project",
+          },
           target: "observation",
           enabled: true,
           sampling: 1,
@@ -582,7 +598,10 @@ describe("unstable public eval services", () => {
         projectId: "project_123",
         input: {
           name: "answer_quality",
-          evaluatorId: "tmpl_project_v2",
+          evaluator: {
+            name: "Answer correctness",
+            scope: "project",
+          },
           target: "observation",
           enabled: true,
           sampling: 1,
@@ -615,7 +634,10 @@ describe("unstable public eval services", () => {
       projectId: "project_123",
       input: {
         name: "answer_quality",
-        evaluatorId: "tmpl_project_v2",
+        evaluator: {
+          name: "Answer correctness",
+          scope: "project",
+        },
         target: "observation",
         enabled: true,
         sampling: 1,
@@ -651,7 +673,10 @@ describe("unstable public eval services", () => {
       projectId: "project_123",
       input: {
         name: "answer_quality",
-        evaluatorId: "tmpl_project_v2",
+        evaluator: {
+          name: "Answer correctness",
+          scope: "project",
+        },
         target: "observation",
         enabled: false,
         sampling: 1,
@@ -664,7 +689,11 @@ describe("unstable public eval services", () => {
       mockAssertEvaluatorDefinitionCanRunForPublicApi,
     ).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      evaluatorId: "tmpl_project_v2",
+      evaluator: {
+        id: "tmpl_project_v2",
+        name: "Answer correctness",
+        scope: "project",
+      },
       enabled: false,
       status: "inactive",
     });
@@ -691,7 +720,10 @@ describe("unstable public eval services", () => {
       projectId: "project_123",
       input: {
         name: "managed_answer_quality",
-        evaluatorId: "tmpl_managed",
+        evaluator: {
+          name: "Answer correctness",
+          scope: "managed",
+        },
         target: "observation",
         enabled: true,
         sampling: 1,
@@ -707,7 +739,11 @@ describe("unstable public eval services", () => {
       include: expect.any(Object),
     });
     expect(result).toMatchObject({
-      evaluatorId: "tmpl_managed",
+      evaluator: {
+        id: "tmpl_managed",
+        name: "Answer correctness",
+        scope: "managed",
+      },
       enabled: true,
       status: "active",
     });

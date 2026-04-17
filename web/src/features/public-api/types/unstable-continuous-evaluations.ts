@@ -5,6 +5,8 @@ import {
   ObservationContinuousEvaluationFilter,
   ObservationContinuousEvaluationMapping,
   PublicContinuousEvaluationFilter,
+  PublicContinuousEvaluationEvaluator,
+  PublicContinuousEvaluationEvaluatorReference,
   PublicContinuousEvaluationMapping,
   PublicContinuousEvaluationStatus,
   PublicContinuousEvaluationTarget,
@@ -16,7 +18,7 @@ export const APIContinuousEvaluation = z
   .object({
     id: z.string(),
     name: z.string(),
-    evaluatorId: z.string(),
+    evaluator: PublicContinuousEvaluationEvaluator,
     target: PublicContinuousEvaluationTarget,
     enabled: z.boolean(),
     status: PublicContinuousEvaluationStatus,
@@ -48,7 +50,7 @@ export const GetUnstableContinuousEvaluationResponse = APIContinuousEvaluation;
 
 const ContinuousEvaluationCreateBase = {
   name: z.string().min(1),
-  evaluatorId: z.string(),
+  evaluator: PublicContinuousEvaluationEvaluatorReference,
   enabled: z.boolean(),
   sampling: z.number().gt(0).lte(1).default(1),
 };
@@ -81,7 +83,7 @@ export const PatchUnstableContinuousEvaluationQuery =
 
 const ContinuousEvaluationPatchBase = {
   name: z.string().min(1).optional(),
-  evaluatorId: z.string().optional(),
+  evaluator: PublicContinuousEvaluationEvaluatorReference.optional(),
   enabled: z.boolean().optional(),
   sampling: z.number().gt(0).lte(1).optional(),
 };

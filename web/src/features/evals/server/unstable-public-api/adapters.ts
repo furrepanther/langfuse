@@ -357,7 +357,11 @@ export function toApiContinuousEvaluation(
   return {
     id: config.id,
     name: config.scoreName,
-    evaluatorId: config.evalTemplate.id,
+    evaluator: {
+      id: config.evalTemplate.id,
+      name: config.evalTemplate.name,
+      scope: config.evalTemplate.projectId === null ? "managed" : "project",
+    },
     target,
     enabled: config.status === JobConfigState.ACTIVE,
     status: toApiContinuousEvaluationStatus(config),
