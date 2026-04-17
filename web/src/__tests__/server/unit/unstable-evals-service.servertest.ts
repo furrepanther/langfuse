@@ -190,7 +190,7 @@ const createContinuousEvaluationRecord = (
 describe("unstable public eval services", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCountActivePublicApiContinuousEvaluations.mockResolvedValue(0);
+    mockCountActiveContinuousEvaluations.mockResolvedValue(0);
     mockCountContinuousEvaluationsForEvaluator.mockResolvedValue(0);
 
     mockedPrisma.$transaction.mockImplementation(async (callback) =>
