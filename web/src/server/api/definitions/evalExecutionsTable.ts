@@ -29,9 +29,9 @@ export const evalExecutionsFilterCols: ColumnDefinition[] = [
     internal: 'je."execution_trace_id"',
   },
   {
-    name: "Score Value",
+    name: "Numeric Score Value",
     id: "scoreValue",
     type: "number",
-    internal: 's."value"',
+    internal: 's."value"', // Not used for PG filtering; CH handles this via buildEvalScoreFilter
   },
 ];

@@ -3,7 +3,11 @@
 import { appRouter } from "@/src/server/api/root";
 import { createInnerTRPCContext } from "@/src/server/api/trpc";
 import { prisma } from "@langfuse/shared/src/db";
-import { createOrgProjectAndApiKey } from "@langfuse/shared/src/server";
+import {
+  createOrgProjectAndApiKey,
+  createScoresCh,
+  createTraceScore,
+} from "@langfuse/shared/src/server";
 import {
   createBooleanEvalOutputDefinition,
   createCategoricalEvalOutputDefinition,
@@ -12,6 +16,7 @@ import {
   EvaluatorBlockReason,
 } from "@langfuse/shared";
 import type { Session } from "next-auth";
+import { v4 } from "uuid";
 
 const __orgIds: string[] = [];
 
@@ -865,4 +870,173 @@ describe("evals trpc", () => {
   //     ).rejects.toThrow("User does not have access to this resource or action");
   //   });
   // });
+
+  describe("evals.getLogs", () => {
+    it("should return logs filtered by score value via ClickHouse", async () => {
+      const { project, caller } = await prepare();
+
+      const scoreName = `test-score-${v4()}`;
+      const traceId = v4();
+
+      const evalJobConfig = await prisma.jobConfiguration.create({
+        data: {
+          projectId: project.id,
+          jobType: "EVAL",
+          scoreName,
+          filter: [],
+          targetObject: EvalTargetObject.TRACE,
+          variableMapping: [],
+          sampling: 1,
+          delay: 0,
+          status: "ACTIVE",
+        },
+      });
+
+      // Create scores in ClickHouse with different values
+      const scoreHigh = createTraceScore({
+        project_id: project.id,
+        trace_id: traceId,
+        name: scoreName,
+        value: 0.9,
+        data_type: "NUMERIC",
+        source: "EVAL",
+      });
+      const scoreLow = createTraceScore({
+        project_id: project.id,
+        trace_id: traceId,
+        name: scoreName,
+        value: 0.1,
+        data_type: "NUMERIC",
+        source: "EVAL",
+      });
+      await createScoresCh([scoreHigh, scoreLow]);
+
+      // Create matching job executions in PG
+      await prisma.jobExecution.create({
+        data: {
+          jobConfigurationId: evalJobConfig.id,
+          status: "COMPLETED",
+          projectId: project.id,
+          jobOutputScoreId: scoreHigh.id,
+          jobInputTraceId: traceId,
+        },
+      });
+      await prisma.jobExecution.create({
+        data: {
+          jobConfigurationId: evalJobConfig.id,
+          status: "COMPLETED",
+          projectId: project.id,
+          jobOutputScoreId: scoreLow.id,
+          jobInputTraceId: traceId,
+        },
+      });
+
+      // No filter — both returned
+      const allLogs = await caller.evals.getLogs({
+        projectId: project.id,
+        jobConfigurationId: evalJobConfig.id,
+        filter: [],
+        page: 0,
+        limit: 50,
+      });
+      expect(allLogs.data.length).toBe(2);
+      expect(allLogs.totalCount).toBe(2);
+
+      // Filter score value >= 0.5 — only high score returned
+      const filteredLogs = await caller.evals.getLogs({
+        projectId: project.id,
+        jobConfigurationId: evalJobConfig.id,
+        filter: [
+          {
+            column: "scoreValue",
+            type: "number" as const,
+            operator: ">=" as const,
+            value: 0.5,
+          },
+        ],
+        page: 0,
+        limit: 50,
+      });
+      expect(filteredLogs.data.length).toBe(1);
+      expect(filteredLogs.totalCount).toBe(1);
+      expect(filteredLogs.data[0].score?.value).toBe(0.9);
+
+      // Filter score value <= 0.5 — only low score returned
+      const lowFilteredLogs = await caller.evals.getLogs({
+        projectId: project.id,
+        jobConfigurationId: evalJobConfig.id,
+        filter: [
+          {
+            column: "scoreValue",
+            type: "number" as const,
+            operator: "<=" as const,
+            value: 0.5,
+          },
+        ],
+        page: 0,
+        limit: 50,
+      });
+      expect(lowFilteredLogs.data.length).toBe(1);
+      expect(lowFilteredLogs.totalCount).toBe(1);
+      expect(lowFilteredLogs.data[0].score?.value).toBe(0.1);
+    });
+
+    it("should return empty results when no scores match the filter", async () => {
+      const { project, caller } = await prepare();
+
+      const scoreName = `test-score-${v4()}`;
+
+      const evalJobConfig = await prisma.jobConfiguration.create({
+        data: {
+          projectId: project.id,
+          jobType: "EVAL",
+          scoreName,
+          filter: [],
+          targetObject: EvalTargetObject.TRACE,
+          variableMapping: [],
+          sampling: 1,
+          delay: 0,
+          status: "ACTIVE",
+        },
+      });
+
+      const score = createTraceScore({
+        project_id: project.id,
+        trace_id: v4(),
+        name: scoreName,
+        value: 0.3,
+        data_type: "NUMERIC",
+        source: "EVAL",
+      });
+      await createScoresCh([score]);
+
+      await prisma.jobExecution.create({
+        data: {
+          jobConfigurationId: evalJobConfig.id,
+          status: "COMPLETED",
+          projectId: project.id,
+          jobOutputScoreId: score.id,
+          jobInputTraceId: score.trace_id,
+        },
+      });
+
+      // Filter for value >= 0.9 — no match
+      const result = await caller.evals.getLogs({
+        projectId: project.id,
+        jobConfigurationId: evalJobConfig.id,
+        filter: [
+          {
+            column: "scoreValue",
+            type: "number" as const,
+            operator: ">=" as const,
+            value: 0.9,
+          },
+        ],
+        page: 0,
+        limit: 50,
+      });
+      expect(result.data.length).toBe(0);
+      expect(result.totalCount).toBe(0);
+    });
+  });
 });

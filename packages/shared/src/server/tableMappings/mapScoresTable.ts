@@ -86,6 +86,12 @@ export const scoresTableUiColumnDefinitions: UiColumnMappings = [
     clickhouseSelect: "metadata",
   },
   {
+    uiTableName: "Execution Trace ID",
+    uiTableId: "executionTraceId",
+    clickhouseTableName: "scores",
+    clickhouseSelect: "execution_trace_id",
+  },
+  {
     uiTableName: "Trace Name",
     uiTableId: "traceName",
     clickhouseTableName: "traces",

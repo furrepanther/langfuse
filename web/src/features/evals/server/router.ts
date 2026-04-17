@@ -33,6 +33,10 @@ import {
   getCostByEvaluatorIds,
   getEvaluatorExecutionStatusCountsByEvaluatorId,
   getScoresByIds,
+  buildEvalScoreFilter,
+  evalFilterToScoresFilter,
+  getScoresUiTable,
+  getScoresUiCount,
   logger,
   QueueName,
   QueueJobs,
@@ -1346,13 +1350,71 @@ export const evalRouter = createTRPCRouter({
         scope: "evalJobExecution:read",
       });
 
+      // Filters that map to ClickHouse score columns (value, traceId,
+      // sessionId, executionTraceId).  Status is the only PG-only filter.
+      const chFilterColumns = new Set(Object.keys(evalFilterToScoresFilter));
+      const chFilters = input.filter.filter((f) =>
+        chFilterColumns.has(f.column),
+      );
+      const pgFilters = input.filter.filter(
+        (f) => !chFilterColumns.has(f.column),
+      );
+
       const filterCondition = tableColumnsToSqlFilterAndPrefix(
-        input.filter,
+        pgFilters,
         evalExecutionsFilterCols,
         "job_executions",
       );
 
-      const [jobExecutions, count] = await Promise.all([
+      // When CH filters are active, ClickHouse handles filtering +
+      // pagination.  Each evaluator execution produces exactly one score,
+      // so CH pagination mirrors execution ordering.  Otherwise, PG
+      // handles pagination and scores are fetched afterwards.
+      let scoreIdCondition = Prisma.empty;
+      let chScores: Awaited<ReturnType<typeof getScoresUiTable>> | undefined;
+      let totalCount: number | undefined;
+
+      if (chFilters.length > 0) {
+        let scoreName: string | undefined;
+        if (input.jobConfigurationId) {
+          const config = await ctx.prisma.jobConfiguration.findUnique({
+            where: {
+              id: input.jobConfigurationId,
+              projectId: input.projectId,
+            },
+            select: { scoreName: true },
+          });
+          scoreName = config?.scoreName ?? undefined;
+        }
+
+        const scoresFilter = buildEvalScoreFilter(chFilters, scoreName);
+
+        const [scores, count] = await Promise.all([
+          getScoresUiTable({
+            projectId: input.projectId,
+            filter: scoresFilter,
+            orderBy: { column: "timestamp", order: "DESC" },
+            limit: input.limit,
+            offset: input.page * input.limit,
+            excludeMetadata: false,
+          }),
+          getScoresUiCount({
+            projectId: input.projectId,
+            filter: scoresFilter,
+            orderBy: null,
+          }),
+        ]);
+
+        if (scores.length === 0) {
+          return { data: [], totalCount: count };
+        }
+
+        chScores = scores;
+        totalCount = count;
+        scoreIdCondition = Prisma.sql`AND je.job_output_score_id = ANY(${scores.map((s) => s.id)})`;
+      }
+
+      const [jobExecutions, countResult] = await Promise.all([
         ctx.prisma.$queryRaw<
           Array<
             Pick<
@@ -1385,39 +1447,52 @@ export const evalRouter = createTRPCRouter({
             input.projectId,
             filterCondition,
             Prisma.sql`ORDER BY je.created_at DESC`,
-            input.limit,
-            input.page,
+            chScores ? chScores.length : input.limit, // CH already paginated
+            chScores ? 0 : input.page,
             input.jobConfigurationId,
+            scoreIdCondition,
           ),
         ),
-        ctx.prisma.$queryRaw<Array<{ totalCount: bigint }>>(
-          generateExecutionsQuery(
-            Prisma.sql`COUNT(*) AS "totalCount"`,
-            input.projectId,
-            filterCondition,
-            Prisma.empty,
-            1, // limit
-            0, // page
-            input.jobConfigurationId,
-          ),
-        ),
+        // Skip PG count when CH already computed it
+        totalCount !== undefined
+          ? Promise.resolve(undefined)
+          : ctx.prisma.$queryRaw<Array<{ totalCount: bigint }>>(
+              generateExecutionsQuery(
+                Prisma.sql`COUNT(*) AS "totalCount"`,
+                input.projectId,
+                filterCondition,
+                Prisma.empty,
+                1,
+                0,
+                input.jobConfigurationId,
+              ),
+            ),
       ]);
 
-      const scoreIds = jobExecutions
-        .map((je) => je.jobOutputScoreId)
-        .filter(isNotNullOrUndefined);
+      if (totalCount === undefined) {
+        totalCount =
+          countResult && countResult.length > 0
+            ? Number(countResult[0]?.totalCount)
+            : 0;
+      }
 
-      const scores =
-        scoreIds.length > 0
-          ? await getScoresByIds(input.projectId, scoreIds)
-          : [];
+      // Use CH scores if available, otherwise fetch from CH by IDs
+      if (!chScores) {
+        const scoreIds = jobExecutions
+          .map((je) => je.jobOutputScoreId)
+          .filter(isNotNullOrUndefined);
+        chScores =
+          scoreIds.length > 0
+            ? await getScoresByIds(input.projectId, scoreIds)
+            : [];
+      }
 
       return {
         data: jobExecutions.map((je) => ({
           ...je,
-          score: scores.find((s) => s?.id === je.jobOutputScoreId),
+          score: chScores.find((s) => s.id === je.jobOutputScoreId),
         })),
-        totalCount: count.length > 0 ? Number(count[0]?.totalCount) : 0,
+        totalCount,
       };
     }),
 
@@ -1594,6 +1669,7 @@ const generateExecutionsQuery = (
   limit: number,
   page: number,
   jobConfigurationId?: string,
+  scoreIdCondition?: Prisma.Sql,
 ) => {
   const configCondition = jobConfigurationId
     ? Prisma.sql`AND je.job_configuration_id = ${jobConfigurationId}`
@@ -1604,9 +1680,9 @@ const generateExecutionsQuery = (
    ${select}
    FROM job_executions je
    LEFT JOIN traces t ON je.job_input_trace_id = t.id AND je.project_id = t.project_id
-   LEFT JOIN scores s ON je.job_output_score_id = s.id AND je.project_id = s.project_id
    WHERE je.project_id = ${projectId}
    ${filterCondition}
+   ${scoreIdCondition ?? Prisma.empty}
    AND je.status != 'CANCELLED'
    ${configCondition}
    ${orderCondition}

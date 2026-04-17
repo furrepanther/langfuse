@@ -34,10 +34,10 @@ export const evalLogFilterConfig: FilterConfig = {
     {
       type: "numeric" as const,
       column: "scoreValue",
-      label: "Score Value",
+      label: "Numeric Score Value",
       min: 0,
       max: 1,
-      step: 0.01,
+      step: 0.1,
     },
   ],
 };

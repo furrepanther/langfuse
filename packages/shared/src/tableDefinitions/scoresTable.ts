@@ -64,6 +64,12 @@ export const scoresTableCols: ColumnDefinition[] = [
   },
   { name: "Value", id: "value", type: "number", internal: 's."value"' },
   {
+    name: "Execution Trace ID",
+    id: "executionTraceId",
+    type: "string",
+    internal: 's."execution_trace_id"',
+  },
+  {
     name: "String Value",
     id: "stringValue",
     type: "stringOptions",

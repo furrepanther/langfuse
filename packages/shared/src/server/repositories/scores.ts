@@ -137,6 +137,48 @@ export const getScoresByIds = async (
   });
 };
 
+/** Column name mapping from eval-log filter IDs to scores table filter IDs. */
+export const evalFilterToScoresFilter: Record<string, string> = {
+  scoreValue: "value",
+  traceId: "traceId",
+  sessionId: "sessionId",
+  executionTraceId: "executionTraceId",
+};
+
+/**
+ * Translates eval-log filter state into scores-table filter state by renaming
+ * columns (e.g. "scoreValue" → "value") and prepending a score-name filter
+ * when the evaluator's name is known.
+ */
+export const buildEvalScoreFilter = (
+  filters: FilterState,
+  scoreName?: string,
+): FilterState => {
+  const mapped: FilterState = filters.map((f) => ({
+    ...f,
+    column: evalFilterToScoresFilter[f.column] ?? f.column,
+  }));
+
+  // Scope to evaluator-produced scores only
+  mapped.push({
+    column: "source",
+    type: "stringOptions" as const,
+    operator: "any of" as const,
+    value: ["EVAL"],
+  });
+
+  if (scoreName) {
+    mapped.push({
+      column: "name",
+      type: "stringOptions" as const,
+      operator: "any of" as const,
+      value: [scoreName],
+    });
+  }
+
+  return mapped;
+};
+
 /**
  * Accepts a score in a Clickhouse-ready format.
  * id, project_id, name, and timestamp must always be provided.

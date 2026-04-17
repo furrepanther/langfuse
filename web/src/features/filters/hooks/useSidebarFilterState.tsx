@@ -182,6 +182,7 @@ export interface NumericUIFilter extends BaseUIFilter {
   value: [number, number];
   min: number;
   max: number;
+  step?: number;
   onChange: (value: [number, number]) => void;
   unit?: string;
 }
@@ -1019,6 +1020,7 @@ export function useSidebarFilterState(
             value: currentRange,
             min: facet.min,
             max: facet.max,
+            step: facet.step,
             unit: facet.unit,
             loading: false,
             expanded: expandedSet.has(facet.column),
