@@ -133,7 +133,7 @@ describe("/api/public/unstable evaluators API", () => {
   });
 
   it("creates exact evaluator versions and lists only the latest project version per family", async () => {
-    await makeZodVerifiedAPICall(
+    const v1 = await makeZodVerifiedAPICall(
       PostUnstableEvaluatorResponse,
       "POST",
       "/api/public/unstable/evaluators",

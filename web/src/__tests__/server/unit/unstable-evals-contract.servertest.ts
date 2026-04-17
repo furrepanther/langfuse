@@ -104,7 +104,7 @@ describe("unstable public eval contracts", () => {
     expect(parsed.error?.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          path: ["outputDefinition"],
+          path: ["outputDefinition", "dataType"],
         }),
       ]),
     );
@@ -560,7 +560,7 @@ describe("unstable public eval adapters", () => {
       evalTemplate: {
         id: "tmpl_exact",
         projectId: "project_123",
-        name: "answer-correctness",
+        name: "Answer correctness",
         vars: ["input"],
         prompt: "Judge {{input}}",
       },
