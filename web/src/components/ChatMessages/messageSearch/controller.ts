@@ -60,6 +60,11 @@ type MessageSearchMessageTarget = {
   editorRef: RefObject<ReactCodeMirrorRef | null>;
 };
 
+type RefreshSearchOptions = {
+  syncEditors?: boolean;
+  syncActiveMatch?: boolean;
+};
+
 export type MessageSearchController = {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => MessageSearchSnapshot;
@@ -339,24 +344,27 @@ export function createMessageSearchController(
     return previousActiveMatchKey !== state.activeMatchKey;
   };
 
-  const refreshSearchResults = (shouldSyncEditors: boolean) => {
+  const refreshSearchResults = ({
+    syncEditors = false,
+    syncActiveMatch = false,
+  }: RefreshSearchOptions) => {
     const activeMatchChanged = recomputeMatches();
 
-    if (shouldSyncEditors || activeMatchChanged) {
+    if (syncEditors || activeMatchChanged) {
       syncEditorsToQuery();
     }
 
-    if (shouldSyncEditors || activeMatchChanged) {
+    if (syncActiveMatch || activeMatchChanged) {
       syncActiveMatchTarget();
     }
   };
 
-  const refreshSearchResultsIfSearching = (shouldSyncEditors: boolean) => {
+  const refreshSearchResultsIfSearching = (options: RefreshSearchOptions) => {
     if (!getCommittedQuery(state)) {
       return;
     }
 
-    refreshSearchResults(shouldSyncEditors);
+    refreshSearchResults(options);
     emit();
   };
 
@@ -366,7 +374,7 @@ export function createMessageSearchController(
     }
 
     state.searchQuery = nextSearchQuery;
-    refreshSearchResults(true);
+    refreshSearchResults({ syncEditors: true, syncActiveMatch: true });
     return true;
   };
 
@@ -520,7 +528,10 @@ export function createMessageSearchController(
       }
 
       state.pageIds = pageIds;
-      refreshSearchResultsIfSearching(false);
+      refreshSearchResultsIfSearching({
+        syncEditors: true,
+        syncActiveMatch: true,
+      });
     },
 
     setPageLabelResolver(getPageLabel) {
@@ -529,12 +540,15 @@ export function createMessageSearchController(
       }
 
       state.getPageLabel = getPageLabel;
-      refreshSearchResultsIfSearching(false);
+      refreshSearchResultsIfSearching({});
     },
 
     registerPageMessages(pageId, messages) {
       state.pageMessagesById[pageId] = messages;
-      refreshSearchResultsIfSearching(false);
+      refreshSearchResultsIfSearching({
+        syncEditors: true,
+        syncActiveMatch: true,
+      });
     },
 
     unregisterPageMessages(pageId) {
@@ -543,7 +557,10 @@ export function createMessageSearchController(
       }
 
       delete state.pageMessagesById[pageId];
-      refreshSearchResultsIfSearching(false);
+      refreshSearchResultsIfSearching({
+        syncEditors: true,
+        syncActiveMatch: true,
+      });
     },
 
     registerPageTarget(pageId, target) {
