@@ -43,10 +43,19 @@ const esmOnlyModuleNameMapper = {
     "<rootDir>/node_modules/json-schema-faker/dist/index.js",
 };
 
-const sharedOverrides = {
-  transformIgnorePatterns: [`/web/node_modules/(?!(${esModules.join("|")})/)`],
-  moduleNameMapper: esmOnlyModuleNameMapper,
-};
+const transformIgnorePatterns = [
+  `/web/node_modules/(?!(${esModules.join("|")})/)`,
+];
+
+// Helper to merge our ESM moduleNameMapper with Next.js's built-in mappings
+const withEsmMapper = (resolved) => ({
+  ...resolved,
+  transformIgnorePatterns,
+  moduleNameMapper: {
+    ...resolved.moduleNameMapper,
+    ...esmOnlyModuleNameMapper,
+  },
+});
 
 // Add any custom config to be passed to Jest
 /** @type {import('jest').Config} */
@@ -57,20 +66,11 @@ const config = {
   workerIdleMemoryLimit: "512MB",
   // Add more setup options before each test is run
   projects: [
-    {
-      ...(await createJestConfig(clientTestConfig)()),
-      // Added transformIgnorePatterns to client tests to handle ESM dependencies from @langfuse/shared
-      // Without this, importing from @langfuse/shared fails with "Unexpected token 'export'" errors
-      ...sharedOverrides,
-    },
-    {
-      ...(await createJestConfig(serverTestConfig)()),
-      ...sharedOverrides,
-    },
-    {
-      ...(await createJestConfig(endToEndServerTestConfig)()),
-      ...sharedOverrides,
-    },
+    // Added transformIgnorePatterns to handle ESM dependencies from @langfuse/shared
+    // Without this, importing from @langfuse/shared fails with "Unexpected token 'export'" errors
+    withEsmMapper(await createJestConfig(clientTestConfig)()),
+    withEsmMapper(await createJestConfig(serverTestConfig)()),
+    withEsmMapper(await createJestConfig(endToEndServerTestConfig)()),
   ],
 };
 
