@@ -48,7 +48,7 @@ const transformIgnorePatterns = [
 ];
 
 // Helper to merge our ESM moduleNameMapper with Next.js's built-in mappings
-const withEsmMapper = (resolved) => ({
+const withEsmMapper = (/** @type {import('jest').Config} */ resolved) => ({
   ...resolved,
   transformIgnorePatterns,
   moduleNameMapper: {
