@@ -65,6 +65,11 @@ type RefreshSearchOptions = {
   syncActiveMatch?: boolean;
 };
 
+type SearchMatchRange = {
+  from: number;
+  to: number;
+};
+
 export type MessageSearchController = {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => MessageSearchSnapshot;
@@ -262,11 +267,36 @@ export function createMessageSearchController(
     pendingQueryTimeout = null;
   };
 
+  const getMatchRangesForMessageTarget = (pageId: string, messageId: string) =>
+    state.matches
+      .filter(
+        (match) => match.pageId === pageId && match.messageId === messageId,
+      )
+      .map((match) => ({ from: match.from, to: match.to }));
+
   const syncEditorsToQuery = () => {
     const query = getCommittedQuery(state);
+    const matchRangesByTargetKey = new Map<string, SearchMatchRange[]>();
 
-    for (const target of messageTargets.values()) {
-      applyCodeMirrorSearchQuery(target.editorRef, query);
+    for (const match of state.matches) {
+      const targetKey = getMessageTargetKey(match.pageId, match.messageId);
+      const ranges = matchRangesByTargetKey.get(targetKey);
+
+      if (ranges) {
+        ranges.push({ from: match.from, to: match.to });
+      } else {
+        matchRangesByTargetKey.set(targetKey, [
+          { from: match.from, to: match.to },
+        ]);
+      }
+    }
+
+    for (const [targetKey, target] of messageTargets.entries()) {
+      applyCodeMirrorSearchQuery(
+        target.editorRef,
+        query,
+        matchRangesByTargetKey.get(targetKey) ?? [],
+      );
     }
   };
 
@@ -576,9 +606,14 @@ export function createMessageSearchController(
     },
 
     registerMessageTarget(pageId, messageId, target) {
-      messageTargets.set(getMessageTargetKey(pageId, messageId), target);
+      const targetKey = getMessageTargetKey(pageId, messageId);
+      messageTargets.set(targetKey, target);
 
-      applyCodeMirrorSearchQuery(target.editorRef, getCommittedQuery(state));
+      applyCodeMirrorSearchQuery(
+        target.editorRef,
+        getCommittedQuery(state),
+        getMatchRangesForMessageTarget(pageId, messageId),
+      );
 
       const activeMatch = getActiveMatch(state);
       if (

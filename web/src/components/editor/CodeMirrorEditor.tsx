@@ -309,6 +309,7 @@ const searchHighlightingSupport = StateField.define<DecorationSet>({
 export function applyCodeMirrorSearchQuery(
   editorRef: RefObject<ReactCodeMirrorRef | null> | undefined,
   searchValue: string,
+  matchRanges: { from: number; to: number }[],
 ) {
   const view = editorRef?.current?.view;
   if (!view) {
@@ -324,14 +325,6 @@ export function applyCodeMirrorSearchQuery(
   view.dispatch({
     effects: setSearchQuery.of(searchQuery),
   });
-
-  const cursor = searchQuery.getCursor(view.state);
-  const matchRanges: { from: number; to: number }[] = [];
-  let current = cursor.next();
-  while (!current.done) {
-    matchRanges.push(current.value);
-    current = cursor.next();
-  }
 
   view.dispatch({
     effects: setSearchHighlightMarks.of(matchRanges),
