@@ -5,6 +5,11 @@ import {
   DataTableControlsProvider,
   DataTableControls,
 } from "@/src/components/table/data-table-controls";
+import {
+  TableBadgeLoadingCell,
+  TableIconButtonLoadingCell,
+  TableTextLoadingCell,
+} from "@/src/components/table/loading-cells";
 import { ResizableFilterLayout } from "@/src/components/table/resizable-filter-layout";
 import TableLink from "@/src/components/table/table-link";
 import { type LangfuseColumnDef } from "@/src/components/table/types";
@@ -39,7 +44,6 @@ import { usePaginationState } from "@/src/hooks/usePaginationState";
 import { useTableDateRange } from "@/src/hooks/useTableDateRange";
 import { toAbsoluteTimeRange } from "@/src/utils/date-range-utils";
 import { joinTableCoreAndMetrics } from "@/src/components/table/utils/joinTableCoreAndMetrics";
-import { Skeleton } from "@/src/components/ui/skeleton";
 import TagList from "@/src/features/tag/components/TagList";
 import { useRowHeightLocalStorage } from "@/src/components/table/data-table-row-height-switch";
 import { cn } from "@/src/utils/tailwind";
@@ -436,6 +440,7 @@ export default function SessionsTable({
       isFixedPosition: true,
       header: undefined,
       size: 50,
+      loadingCell: <TableIconButtonLoadingCell />,
       cell: ({ row }) => {
         const bookmarked: SessionTableRow["bookmarked"] =
           row.getValue("bookmarked");
@@ -489,11 +494,12 @@ export default function SessionsTable({
       header: "Duration",
       size: 130,
       enableHiding: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["sessionDuration"] =
           row.getValue("sessionDuration");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value && typeof value === "number"
           ? formatIntervalSeconds(value)
@@ -507,6 +513,7 @@ export default function SessionsTable({
       id: "environment",
       size: 150,
       enableHiding: true,
+      loadingCell: <TableBadgeLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["environment"] =
           row.getValue("environment");
@@ -527,7 +534,7 @@ export default function SessionsTable({
       enableHiding: true,
       defaultHidden: true,
       cell: () => {
-        return isColumnLoading ? <Skeleton className="h-3 w-1/2" /> : null;
+        return isColumnLoading ? <TableTextLoadingCell /> : null;
       },
       columns: scoreColumns,
     },
@@ -538,10 +545,11 @@ export default function SessionsTable({
       header: "User IDs",
       size: 200,
       enableHiding: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["userIds"] = row.getValue("userIds");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value && Array.isArray(value) ? (
           <div className="flex gap-1">
@@ -566,11 +574,12 @@ export default function SessionsTable({
       },
       enableHiding: true,
       enableSorting: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["countTraces"] =
           row.getValue("countTraces");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value ? <span>{numberFormatter(value, 0)}</span> : undefined;
       },
@@ -583,10 +592,11 @@ export default function SessionsTable({
       enableHiding: true,
       defaultHidden: true,
       enableSorting: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["inputCost"] = row.getValue("inputCost");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value ? (
           <span>{usdFormatter(value.toNumber())}</span>
@@ -601,10 +611,11 @@ export default function SessionsTable({
       enableHiding: true,
       enableSorting: true,
       defaultHidden: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["outputCost"] = row.getValue("outputCost");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value ? (
           <span>{usdFormatter(value.toNumber())}</span>
@@ -618,10 +629,11 @@ export default function SessionsTable({
       size: 110,
       enableHiding: true,
       enableSorting: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["totalCost"] = row.getValue("totalCost");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value ? (
           <span>{usdFormatter(value.toNumber())}</span>
@@ -636,11 +648,12 @@ export default function SessionsTable({
       enableHiding: true,
       defaultHidden: true,
       enableSorting: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["inputTokens"] =
           row.getValue("inputTokens");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value ? (
           <span>{numberFormatter(Number(value), 0)}</span>
@@ -655,11 +668,12 @@ export default function SessionsTable({
       enableHiding: true,
       defaultHidden: true,
       enableSorting: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["outputTokens"] =
           row.getValue("outputTokens");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value ? (
           <span>{numberFormatter(Number(value), 0)}</span>
@@ -674,11 +688,12 @@ export default function SessionsTable({
       enableHiding: true,
       defaultHidden: true,
       enableSorting: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["totalTokens"] =
           row.getValue("totalTokens");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return value ? (
           <span>{numberFormatter(Number(value), 0)}</span>
@@ -692,6 +707,7 @@ export default function SessionsTable({
       size: 220,
       enableHiding: true,
       enableSorting: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const promptTokens: SessionTableRow["inputTokens"] =
           row.getValue("inputTokens");
@@ -700,7 +716,7 @@ export default function SessionsTable({
         const totalTokens: SessionTableRow["totalTokens"] =
           row.getValue("totalTokens");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return (
           <TokenUsageBadge
@@ -719,10 +735,11 @@ export default function SessionsTable({
       size: 250,
       enableHiding: true,
       defaultHidden: true,
+      loadingCell: <TableTextLoadingCell />,
       cell: ({ row }) => {
         const value: SessionTableRow["traceTags"] = row.getValue("traceTags");
         if (!sessionMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return (
           value && (

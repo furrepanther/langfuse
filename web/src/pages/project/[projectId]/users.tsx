@@ -9,9 +9,12 @@ import {
 } from "use-query-params";
 import { DataTableToolbar } from "@/src/components/table/data-table-toolbar";
 import { DataTable } from "@/src/components/table/data-table";
+import {
+  TableBadgeLoadingCell,
+  TableTextLoadingCell,
+} from "@/src/components/table/loading-cells";
 import TableLink from "@/src/components/table/table-link";
 import { type LangfuseColumnDef } from "@/src/components/table/types";
-import { Skeleton } from "@/src/components/ui/skeleton";
 import { useQueryFilterState } from "@/src/features/filters/hooks/useFilterState";
 import { useDetailPageLists } from "@/src/features/navigate-detail-pages/context";
 import { useV4Beta } from "@/src/features/events/hooks/useV4Beta";
@@ -44,7 +47,7 @@ type RowData = {
 export default function UsersPage() {
   const router = useRouter();
   const projectId = router.query.projectId as string;
-  const { isBetaEnabled } = useV4Beta();
+  const { isBetaEnabled, isInitializing } = useV4Beta();
 
   // Check if the user has any users
   const { data: hasAnyUser, isLoading } = api.users.hasAny.useQuery(
@@ -76,7 +79,7 @@ export default function UsersPage() {
 
   const hasUsers = isBetaEnabled ? hasAnyUserFromEvents : hasAnyUser;
   const isLoadingUsers = isBetaEnabled ? isLoadingFromEvents : isLoading;
-  const showOnboarding = !isLoadingUsers && !hasUsers;
+  const showOnboarding = !isInitializing && !isLoadingUsers && !hasUsers;
 
   return (
     <Page
@@ -309,6 +312,7 @@ const UsersTable = ({ isBetaEnabled }: { isBetaEnabled: boolean }) => {
       id: "environment",
       size: 150,
       enableHiding: true,
+      loadingCell: <TableBadgeLoadingCell />,
       cell: ({ row }) => {
         const value: RowData["environment"] = row.getValue("environment");
         return value ? (
@@ -331,7 +335,7 @@ const UsersTable = ({ isBetaEnabled }: { isBetaEnabled: boolean }) => {
       cell: ({ row }) => {
         const value: RowData["firstEvent"] = row.getValue("firstEvent");
         if (!userMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return typeof value === "string" ? value : undefined;
       },
@@ -346,7 +350,7 @@ const UsersTable = ({ isBetaEnabled }: { isBetaEnabled: boolean }) => {
       cell: ({ row }) => {
         const value: RowData["lastEvent"] = row.getValue("lastEvent");
         if (!userMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return typeof value === "string" ? value : undefined;
       },
@@ -363,7 +367,7 @@ const UsersTable = ({ isBetaEnabled }: { isBetaEnabled: boolean }) => {
       cell: ({ row }) => {
         const value: RowData["totalEvents"] = row.getValue("totalEvents");
         if (!userMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return typeof value === "string" ? value : undefined;
       },
@@ -380,7 +384,7 @@ const UsersTable = ({ isBetaEnabled }: { isBetaEnabled: boolean }) => {
       cell: ({ row }) => {
         const value: RowData["totalTokens"] = row.getValue("totalTokens");
         if (!userMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return typeof value === "string" ? value : undefined;
       },
@@ -396,7 +400,7 @@ const UsersTable = ({ isBetaEnabled }: { isBetaEnabled: boolean }) => {
       cell: ({ row }) => {
         const value: RowData["totalCost"] = row.getValue("totalCost");
         if (!userMetrics.isSuccess) {
-          return <Skeleton className="h-3 w-1/2" />;
+          return <TableTextLoadingCell />;
         }
         return typeof value === "string" ? value : undefined;
       },
