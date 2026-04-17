@@ -179,12 +179,10 @@ export const NewDatasetItemForm = (props: {
     const dataset = selectedDatasets[0];
     if (!dataset) return;
 
-    let cancelled = false;
-
     // Generate input placeholder if schema exists and field is empty
     if (dataset.inputSchema && !inputValue) {
       void generateSchemaExample(dataset.inputSchema).then((placeholder) => {
-        if (!cancelled && placeholder) {
+        if (placeholder) {
           form.setValue("input", placeholder, {
             shouldValidate: false,
             shouldDirty: false,
@@ -198,7 +196,7 @@ export const NewDatasetItemForm = (props: {
     if (dataset.expectedOutputSchema && !expectedOutputValue) {
       void generateSchemaExample(dataset.expectedOutputSchema).then(
         (placeholder) => {
-          if (!cancelled && placeholder) {
+          if (placeholder) {
             form.setValue("expectedOutput", placeholder, {
               shouldValidate: false,
               shouldDirty: false,
@@ -208,10 +206,6 @@ export const NewDatasetItemForm = (props: {
         },
       );
     }
-
-    return () => {
-      cancelled = true;
-    };
   }, [
     selectedDatasets,
     hasInitialValues,

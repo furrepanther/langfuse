@@ -31,13 +31,7 @@ export const DatasetSchemaHoverCard: React.FC<DatasetSchemaHoverCardProps> = ({
   // Generate example object from schema
   const [exampleObject, setExampleObject] = useState("");
   useEffect(() => {
-    let cancelled = false;
-    generateSchemaExample(schema).then((result) => {
-      if (!cancelled) setExampleObject(result);
-    });
-    return () => {
-      cancelled = true;
-    };
+    void generateSchemaExample(schema).then(setExampleObject);
   }, [schema]);
 
   // State for copy button feedback
