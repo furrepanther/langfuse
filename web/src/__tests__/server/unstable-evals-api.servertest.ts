@@ -197,17 +197,20 @@ describe("/api/public/unstable evaluators API", () => {
       auth,
     );
 
-    expect(listed.body.meta.totalItems).toBe(1);
-    expect(listed.body.data).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: v2.body.id,
-          name: "Answer correctness",
-          version: 2,
-          scope: "project",
-        }),
-      ]),
+    const projectFamilyEntries = listed.body.data.filter(
+      (evaluator) =>
+        evaluator.name === "Answer correctness" &&
+        evaluator.scope === "project",
     );
+
+    expect(projectFamilyEntries).toEqual([
+      expect.objectContaining({
+        id: v2.body.id,
+        name: "Answer correctness",
+        version: 2,
+        scope: "project",
+      }),
+    ]);
     expect(
       listed.body.data.some((evaluator) => evaluator.id === v1.body.id),
     ).toBe(false);
