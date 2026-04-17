@@ -182,9 +182,9 @@ export const NewDatasetItemForm = (props: {
     let cancelled = false;
 
     // Generate input placeholder if schema exists and field is empty
-    if (dataset.inputSchema && !inputValue) {
+    if (dataset.inputSchema && !form.getValues("input")) {
       void generateSchemaExample(dataset.inputSchema).then((placeholder) => {
-        if (!cancelled && placeholder) {
+        if (!cancelled && placeholder && !form.getValues("input")) {
           form.setValue("input", placeholder, {
             shouldValidate: false,
             shouldDirty: false,
@@ -195,10 +195,10 @@ export const NewDatasetItemForm = (props: {
     }
 
     // Generate expectedOutput placeholder if schema exists and field is empty
-    if (dataset.expectedOutputSchema && !expectedOutputValue) {
+    if (dataset.expectedOutputSchema && !form.getValues("expectedOutput")) {
       void generateSchemaExample(dataset.expectedOutputSchema).then(
         (placeholder) => {
-          if (!cancelled && placeholder) {
+          if (!cancelled && placeholder && !form.getValues("expectedOutput")) {
             form.setValue("expectedOutput", placeholder, {
               shouldValidate: false,
               shouldDirty: false,
@@ -212,13 +212,7 @@ export const NewDatasetItemForm = (props: {
     return () => {
       cancelled = true;
     };
-  }, [
-    selectedDatasets,
-    hasInitialValues,
-    inputValue,
-    expectedOutputValue,
-    form,
-  ]);
+  }, [selectedDatasets, hasInitialValues, form]);
 
   const utils = api.useUtils();
   const createManyDatasetItemsMutation =
