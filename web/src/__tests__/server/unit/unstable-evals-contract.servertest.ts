@@ -74,12 +74,40 @@ describe("unstable public eval contracts", () => {
     expect(parsed).toEqual({
       name: "Answer correctness",
       prompt: "Judge {{input}} against {{output}}",
-      outputDefinition: numericOutputDefinition,
+      outputDefinition: {
+        dataType: "NUMERIC",
+        reasoning: {
+          description: "Why the score was assigned",
+        },
+        score: {
+          description: "A score between 0 and 1",
+        },
+      },
       modelConfig: {
         provider: "openai",
         model: "gpt-4.1-mini",
       },
     });
+  });
+
+  it("requires outputDefinition.dataType for evaluator creation", () => {
+    const parsed = PostUnstableEvaluatorBody.safeParse({
+      name: "Answer correctness",
+      prompt: "Judge {{input}} against {{output}}",
+      outputDefinition: {
+        reasoning: "Explain why the answer is correct or incorrect.",
+        score: "Return a score between 0 and 1.",
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ["outputDefinition"],
+        }),
+      ]),
+    );
   });
 
   it("rejects observation continuous evaluations that use expected_output mappings", () => {

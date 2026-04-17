@@ -5,7 +5,6 @@ import {
   numberFilter,
   numberObjectFilter,
   observationEvalFilterColumns,
-  PersistedEvalOutputDefinitionSchema,
   paginationMetaResponseZod,
   stringFilter,
   stringObjectFilter,
@@ -229,6 +228,6 @@ export const UnstablePublicApiPaginationResponse = paginationMetaResponseZod;
 
 export const PublicEvaluatorDefinitionInput = z.object({
   prompt: z.string().min(1),
-  outputDefinition: PersistedEvalOutputDefinitionSchema,
+  outputDefinition: PublicEvaluatorOutputDefinition,
   modelConfig: PublicEvaluatorModelConfig.nullable().optional(),
 });

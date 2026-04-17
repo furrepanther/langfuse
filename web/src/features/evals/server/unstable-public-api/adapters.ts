@@ -1,4 +1,7 @@
 import {
+  createBooleanEvalOutputDefinition,
+  createCategoricalEvalOutputDefinition,
+  createNumericEvalOutputDefinition,
   EvalTargetObject,
   extractVariables,
   JobConfigState,
@@ -7,6 +10,7 @@ import {
   resolvePersistedEvalOutputDefinition,
   singleFilter,
   type ObservationVariableMapping,
+  type PersistedEvalOutputDefinition,
 } from "@langfuse/shared";
 import { InternalServerError } from "@langfuse/shared";
 import { logger } from "@langfuse/shared/src/server";
@@ -152,6 +156,31 @@ export function parseStoredOutputDefinition(
       description: resolvedOutputDefinition.scoreDescription,
     },
   };
+}
+
+export function toStoredOutputDefinition(
+  outputDefinition: PublicEvaluatorOutputDefinitionType,
+): PersistedEvalOutputDefinition {
+  switch (outputDefinition.dataType) {
+    case "NUMERIC":
+      return createNumericEvalOutputDefinition({
+        reasoningDescription: outputDefinition.reasoning.description,
+        scoreDescription: outputDefinition.score.description,
+      });
+    case "BOOLEAN":
+      return createBooleanEvalOutputDefinition({
+        reasoningDescription: outputDefinition.reasoning.description,
+        scoreDescription: outputDefinition.score.description,
+      });
+    case "CATEGORICAL":
+      return createCategoricalEvalOutputDefinition({
+        reasoningDescription: outputDefinition.reasoning.description,
+        scoreDescription: outputDefinition.score.description,
+        categories: outputDefinition.score.categories,
+        shouldAllowMultipleMatches:
+          outputDefinition.score.shouldAllowMultipleMatches,
+      });
+  }
 }
 
 export function toApiModelConfig(

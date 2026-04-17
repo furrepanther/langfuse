@@ -6701,6 +6701,10 @@ paths:
         the structured `details.issues` array to fix the specific fields and
         retry.
 
+        - `400` with `code=invalid_body` on `outputDefinition`: send `dataType`,
+        `reasoning.description`, and `score.description`. Do not send `version`;
+        it is not part of the public request shape.
+
 
         Unstable API note:
 
@@ -6822,7 +6826,6 @@ paths:
 
                     Return a score between 0 and 1.
                   outputDefinition:
-                    version: 2
                     dataType: NUMERIC
                     reasoning:
                       description: Explain why the score was assigned.
@@ -12054,110 +12057,8 @@ components:
             this field.
       required:
         - description
-    unstableLegacyEvaluatorOutputDefinition:
-      title: unstableLegacyEvaluatorOutputDefinition
-      type: object
-      description: >-
-        Legacy evaluator output definition.
-
-
-        This shape is supported for backward compatibility, but new clients
-        should prefer the v2 output definition shapes below.
-
-        If you send this legacy shape, the response is still normalized into the
-        public response shape that includes `dataType` and omits `version`.
-      properties:
-        reasoning:
-          type: string
-          description: Instructions for the reasoning field.
-          example: Explain why the answer is correct or incorrect.
-        score:
-          type: string
-          description: Instructions for the score field.
-          example: Return a number between 0 and 1.
-      required:
-        - reasoning
-        - score
-    unstableNumericEvaluatorOutputDefinitionV2:
-      title: unstableNumericEvaluatorOutputDefinitionV2
-      type: object
-      properties:
-        version:
-          type: integer
-          description: Output definition version. Must be `2`.
-        dataType:
-          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
-          description: Must be `NUMERIC`.
-        reasoning:
-          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
-        score:
-          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
-      required:
-        - version
-        - dataType
-        - reasoning
-        - score
-    unstableBooleanEvaluatorOutputDefinitionV2:
-      title: unstableBooleanEvaluatorOutputDefinitionV2
-      type: object
-      properties:
-        version:
-          type: integer
-          description: Output definition version. Must be `2`.
-        dataType:
-          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
-          description: Must be `BOOLEAN`.
-        reasoning:
-          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
-        score:
-          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
-      required:
-        - version
-        - dataType
-        - reasoning
-        - score
-    unstableCategoricalEvaluatorOutputScoreV2:
-      title: unstableCategoricalEvaluatorOutputScoreV2
-      type: object
-      properties:
-        description:
-          type: string
-          description: >-
-            Human-readable instructions for how the evaluator should choose
-            categories.
-        categories:
-          type: array
-          items:
-            type: string
-          description: Allowed category labels. Must contain at least two unique values.
-        shouldAllowMultipleMatches:
-          type: boolean
-          nullable: true
-          description: Whether the evaluator may return more than one matching category.
-      required:
-        - description
-        - categories
-    unstableCategoricalEvaluatorOutputDefinitionV2:
-      title: unstableCategoricalEvaluatorOutputDefinitionV2
-      type: object
-      properties:
-        version:
-          type: integer
-          description: Output definition version. Must be `2`.
-        dataType:
-          $ref: '#/components/schemas/unstableEvaluatorOutputDataType'
-          description: Must be `CATEGORICAL`.
-        reasoning:
-          $ref: '#/components/schemas/unstableEvaluatorOutputFieldDefinition'
-        score:
-          $ref: '#/components/schemas/unstableCategoricalEvaluatorOutputScoreV2'
-      required:
-        - version
-        - dataType
-        - reasoning
-        - score
-    unstableEvaluatorOutputDefinitionV2:
-      title: unstableEvaluatorOutputDefinitionV2
+    unstableEvaluatorOutputDefinition:
+      title: unstableEvaluatorOutputDefinition
       oneOf:
         - type: object
           allOf:
@@ -12167,7 +12068,8 @@ components:
                   type: string
                   enum:
                     - NUMERIC
-            - $ref: '#/components/schemas/unstableNumericEvaluatorOutputDefinitionV2'
+            - $ref: >-
+                #/components/schemas/unstablePublicNumericEvaluatorOutputDefinition
           required:
             - dataType
         - type: object
@@ -12178,7 +12080,8 @@ components:
                   type: string
                   enum:
                     - BOOLEAN
-            - $ref: '#/components/schemas/unstableBooleanEvaluatorOutputDefinitionV2'
+            - $ref: >-
+                #/components/schemas/unstablePublicBooleanEvaluatorOutputDefinition
           required:
             - dataType
         - type: object
@@ -12190,37 +12093,25 @@ components:
                   enum:
                     - CATEGORICAL
             - $ref: >-
-                #/components/schemas/unstableCategoricalEvaluatorOutputDefinitionV2
+                #/components/schemas/unstablePublicCategoricalEvaluatorOutputDefinition
           required:
             - dataType
-    unstableEvaluatorOutputDefinition:
-      title: unstableEvaluatorOutputDefinition
-      oneOf:
-        - $ref: '#/components/schemas/unstableLegacyEvaluatorOutputDefinition'
-        - $ref: '#/components/schemas/unstableEvaluatorOutputDefinitionV2'
       description: >-
         Structured output definition to send when creating an evaluator.
 
 
-        New clients should prefer the version `2` shapes because they are
-        explicit about:
-
-        - the score `dataType`
-
-        - the instructions for the `reasoning` field
-
-        - the instructions for the `score` field
-
-        - the allowed categories for categorical scores
-
-
         Agent guidance:
 
-        - For new integrations, always send a version `2` shape.
+        - `dataType` is required.
 
-        - The response shape is slightly different: public responses always
-        include `dataType` and never include the internal output-definition
-        `version`.
+        - Do not send `version`; that is an internal storage detail and is not
+        part of the public request contract.
+
+        - For `NUMERIC` and `BOOLEAN`, provide `reasoning.description` and
+        `score.description`.
+
+        - For `CATEGORICAL`, also provide `score.categories` and
+        `score.shouldAllowMultipleMatches`.
     unstablePublicNumericEvaluatorOutputDefinition:
       title: unstablePublicNumericEvaluatorOutputDefinition
       type: object
@@ -13498,11 +13389,10 @@ components:
             Structured output schema the evaluator must return.
 
 
-            New integrations should prefer the explicit version `2` shapes.
+            Always send `dataType`.
 
-            In the response, Langfuse normalizes this into the public response
-            shape that always includes `dataType` and never includes the
-            internal `version`.
+            Do not send `version`; it is an internal storage detail and not part
+            of the public request contract.
         modelConfig:
           $ref: '#/components/schemas/unstableEvaluatorModelConfig'
           nullable: true

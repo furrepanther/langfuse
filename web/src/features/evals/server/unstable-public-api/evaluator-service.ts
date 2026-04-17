@@ -8,7 +8,11 @@ import { invalidateProjectEvalConfigCaches } from "@langfuse/shared/src/server";
 import { Prisma, prisma } from "@langfuse/shared/src/db";
 import { z } from "zod";
 import type { PostUnstableEvaluatorBodyType } from "@/src/features/public-api/types/unstable-evaluators";
-import { toApiEvaluator, toStoredModelConfig } from "./adapters";
+import {
+  toApiEvaluator,
+  toStoredModelConfig,
+  toStoredOutputDefinition,
+} from "./adapters";
 import {
   countContinuousEvaluationsForEvaluator,
   countContinuousEvaluationsForEvaluatorIds,
@@ -103,13 +107,17 @@ export async function createPublicEvaluator(params: {
   projectId: string;
   input: PostUnstableEvaluatorBodyType;
 }) {
+  const storedOutputDefinition = toStoredOutputDefinition(
+    params.input.outputDefinition,
+  );
+
   await assertEvaluatorDefinitionCanRunForPublicApi({
     projectId: params.projectId,
     template: {
       name: params.input.name,
       provider: params.input.modelConfig?.provider ?? null,
       model: params.input.modelConfig?.model ?? null,
-      outputDefinition: params.input.outputDefinition,
+      outputDefinition: storedOutputDefinition,
     },
   });
 
@@ -177,7 +185,7 @@ export async function createPublicEvaluator(params: {
             model: modelConfig.model,
             modelParams: modelConfig.modelParams,
             vars: nextVariables,
-            outputDefinition: params.input.outputDefinition,
+            outputDefinition: storedOutputDefinition,
           },
         });
 

@@ -28,6 +28,7 @@ service:
         Recovery guidance:
         - `422` with `code=evaluator_preflight_failed`: the evaluator cannot run with the resolved model configuration. Add a valid explicit `modelConfig`, or configure the project's default evaluation model, then retry the same request.
         - `400` with `code=invalid_body`: the request shape is malformed. Use the structured `details.issues` array to fix the specific fields and retry.
+        - `400` with `code=invalid_body` on `outputDefinition`: send `dataType`, `reasoning.description`, and `score.description`. Do not send `version`; it is not part of the public request shape.
 
         Unstable API note:
         - This surface may evolve while the underlying evaluation data model is being redesigned.
@@ -60,7 +61,6 @@ service:
 
               Return a score between 0 and 1.
             outputDefinition:
-              version: 2
               dataType: NUMERIC
               reasoning:
                 description: Explain why the score was assigned.
@@ -243,8 +243,8 @@ types:
         docs: |
           Structured output schema the evaluator must return.
 
-          New integrations should prefer the explicit version `2` shapes.
-          In the response, Langfuse normalizes this into the public response shape that always includes `dataType` and never includes the internal `version`.
+          Always send `dataType`.
+          Do not send `version`; it is an internal storage detail and not part of the public request contract.
       modelConfig:
         type: optional<nullable<commons.EvaluatorModelConfig>>
         docs: Optional explicit model configuration. Omit or set to `null` to use the project default evaluation model.

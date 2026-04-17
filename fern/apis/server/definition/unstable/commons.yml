@@ -110,122 +110,40 @@ types:
         type: string
         docs: Human-readable instructions for what the evaluator should return in this field.
 
-  LegacyEvaluatorOutputDefinition:
-    docs: |
-      Legacy evaluator output definition.
-
-      This shape is supported for backward compatibility, but new clients should prefer the v2 output definition shapes below.
-      If you send this legacy shape, the response is still normalized into the public response shape that includes `dataType` and omits `version`.
-    properties:
-      reasoning:
-        type: string
-        docs: Instructions for the reasoning field.
-      score:
-        type: string
-        docs: Instructions for the score field.
-    examples:
-      - value:
-          reasoning: Explain why the answer is correct or incorrect.
-          score: Return a number between 0 and 1.
-
-  NumericEvaluatorOutputDefinitionV2:
-    properties:
-      version:
-        type: integer
-        docs: Output definition version. Must be `2`.
-      dataType:
-        type: EvaluatorOutputDataType
-        docs: Must be `NUMERIC`.
-      reasoning:
-        type: EvaluatorOutputFieldDefinition
-      score:
-        type: EvaluatorOutputFieldDefinition
-
-  BooleanEvaluatorOutputDefinitionV2:
-    properties:
-      version:
-        type: integer
-        docs: Output definition version. Must be `2`.
-      dataType:
-        type: EvaluatorOutputDataType
-        docs: Must be `BOOLEAN`.
-      reasoning:
-        type: EvaluatorOutputFieldDefinition
-      score:
-        type: EvaluatorOutputFieldDefinition
-
-  CategoricalEvaluatorOutputScoreV2:
-    properties:
-      description:
-        type: string
-        docs: Human-readable instructions for how the evaluator should choose categories.
-      categories:
-        type: list<string>
-        docs: Allowed category labels. Must contain at least two unique values.
-      shouldAllowMultipleMatches:
-        type: optional<boolean>
-        docs: Whether the evaluator may return more than one matching category.
-
-  CategoricalEvaluatorOutputDefinitionV2:
-    properties:
-      version:
-        type: integer
-        docs: Output definition version. Must be `2`.
-      dataType:
-        type: EvaluatorOutputDataType
-        docs: Must be `CATEGORICAL`.
-      reasoning:
-        type: EvaluatorOutputFieldDefinition
-      score:
-        type: CategoricalEvaluatorOutputScoreV2
-
-  EvaluatorOutputDefinitionV2:
-    discriminant: dataType
-    union:
-      NUMERIC:
-        type: NumericEvaluatorOutputDefinitionV2
-      BOOLEAN:
-        type: BooleanEvaluatorOutputDefinitionV2
-      CATEGORICAL:
-        type: CategoricalEvaluatorOutputDefinitionV2
-
   EvaluatorOutputDefinition:
     docs: |
       Structured output definition to send when creating an evaluator.
 
-      New clients should prefer the version `2` shapes because they are explicit about:
-      - the score `dataType`
-      - the instructions for the `reasoning` field
-      - the instructions for the `score` field
-      - the allowed categories for categorical scores
-
       Agent guidance:
-      - For new integrations, always send a version `2` shape.
-      - The response shape is slightly different: public responses always include `dataType` and never include the internal output-definition `version`.
-    discriminated: false
+      - `dataType` is required.
+      - Do not send `version`; that is an internal storage detail and is not part of the public request contract.
+      - For `NUMERIC` and `BOOLEAN`, provide `reasoning.description` and `score.description`.
+      - For `CATEGORICAL`, also provide `score.categories` and `score.shouldAllowMultipleMatches`.
+    discriminant: dataType
     union:
-      - LegacyEvaluatorOutputDefinition
-      - EvaluatorOutputDefinitionV2
+      NUMERIC:
+        type: PublicNumericEvaluatorOutputDefinition
+      BOOLEAN:
+        type: PublicBooleanEvaluatorOutputDefinition
+      CATEGORICAL:
+        type: PublicCategoricalEvaluatorOutputDefinition
     examples:
-      - name: NumericV2
+      - name: Numeric
         value:
-          version: 2
           dataType: NUMERIC
           reasoning:
             description: Explain why the answer is correct or incorrect.
           score:
             description: Return a score between 0 and 1.
-      - name: BooleanV2
+      - name: Boolean
         value:
-          version: 2
           dataType: BOOLEAN
           reasoning:
             description: Explain why the output satisfies the requirement.
           score:
             description: Return true if the output satisfies the requirement, otherwise false.
-      - name: CategoricalV2
+      - name: Categorical
         value:
-          version: 2
           dataType: CATEGORICAL
           reasoning:
             description: Explain which category best fits the output.
