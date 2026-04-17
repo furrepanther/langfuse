@@ -7,19 +7,22 @@ type ConfirmationStepProps = {
   projectId: string;
   displayCount: number;
   evaluators: Array<{ id: string; name: string }>;
+  hideCount: boolean;
 };
 
 export function ConfirmationStep(props: ConfirmationStepProps) {
-  const { projectId, displayCount, evaluators } = props;
+  const { projectId, displayCount, evaluators, hideCount } = props;
 
   return (
     <div className="space-y-4">
       <Card>
         <CardContent className="space-y-3 p-4 text-sm">
-          <div className="flex gap-2">
-            <span className="text-muted-foreground">Observations:</span>
-            <span className="font-medium">{displayCount}</span>
-          </div>
+          {!hideCount && (
+            <div className="flex gap-2">
+              <span className="text-muted-foreground">Observations:</span>
+              <span className="font-medium">{displayCount}</span>
+            </div>
+          )}
 
           {evaluators.length > 0 && (
             <div className="flex gap-2">

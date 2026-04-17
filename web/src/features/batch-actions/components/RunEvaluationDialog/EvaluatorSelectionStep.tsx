@@ -12,6 +12,7 @@ import { Eye, Plus, X } from "lucide-react";
 
 type Evaluator = RouterOutputs["evals"]["jobConfigsByTarget"][number];
 type ObservationPreview = RouterOutputs["observations"]["byId"];
+type EventPreview = RouterOutputs["events"]["batchIO"][number][0];
 
 type EvaluatorSelectionStepProps = {
   eligibleEvaluators: Evaluator[];
@@ -19,7 +20,7 @@ type EvaluatorSelectionStepProps = {
   isQueryLoading: boolean;
   isQueryError: boolean;
   queryErrorMessage: string | undefined;
-  previewObservation: ObservationPreview | undefined;
+  previewObservation: ObservationPreview | EventPreview | undefined;
   isPreviewLoading: boolean;
   selectedEvaluatorIds: string[];
   evaluatorSearchQuery: string;

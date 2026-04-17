@@ -22,7 +22,7 @@ import { useRowHeightLocalStorage } from "@/src/components/table/data-table-row-
 import { useTableDateRange } from "@/src/hooks/useTableDateRange";
 import { toAbsoluteTimeRange } from "@/src/utils/date-range-utils";
 import useColumnOrder from "@/src/features/column-visibility/hooks/useColumnOrder";
-import { GitCompareArrows } from "lucide-react";
+import { GitCompareArrows, LightbulbIcon } from "lucide-react";
 import { LocalIsoDate } from "@/src/components/LocalIsoDate";
 import Link from "next/link";
 import { Button } from "@/src/components/ui/button";
@@ -45,6 +45,8 @@ import {
 import { useExperimentsTableData } from "../../hooks/useExperimentsTableData";
 import { type ExperimentsTableRow, type ExperimentsTableProps } from "./types";
 import { useExperimentFilterOptions } from "../../hooks/useExperimentFilterOptions";
+import { RunEvaluationDialog } from "@/src/features/batch-actions/components/RunEvaluationDialog";
+import { useHasProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 
 export default function ExperimentsTable({
   projectId,
@@ -65,8 +67,14 @@ export default function ExperimentsTable({
 
   const { setDetailPageList } = useDetailPageLists();
   const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
+  const [showRunEvaluationDialog, setShowRunEvaluationDialog] = useState(false);
 
   const { selectAll, setSelectAll } = useSelectAll(projectId, "experiments");
+
+  const hasEvalAccess = useHasProjectAccess({
+    projectId,
+    scope: "evalJob:CUD",
+  });
 
   const [paginationState, setPaginationState] = usePaginationState(1, 50);
 
@@ -495,6 +503,25 @@ export default function ExperimentsTable({
       .map((row) => row.id);
   }, [selectedRows, rows]);
 
+  // Build query with experiment context filter for batch actions
+  const batchActionQuery = useMemo(
+    () => ({
+      filter:
+        selectedExperimentIds.length > 0
+          ? [
+              {
+                column: "experimentId" as const,
+                operator: "any of" as const,
+                value: selectedExperimentIds,
+                type: "stringOptions" as const,
+              },
+            ]
+          : [],
+      orderBy: { column: "startTime" as const, order: "DESC" as const },
+    }),
+    [selectedExperimentIds],
+  );
+
   // Handler for comparing selected experiments
   // First selected becomes baseline, rest become comparisons
   const handleCompareSelected = useCallback(() => {
@@ -513,129 +540,159 @@ export default function ExperimentsTable({
   }, [selectedExperimentIds, projectId, router]);
 
   return (
-    <DataTableControlsProvider>
-      <div className="flex h-full w-full flex-col">
-        {/* Toolbar spanning full width */}
-        <DataTableToolbar
-          columns={columns}
-          filterState={queryFilter.filterState}
-          viewConfig={{
-            tableName: TableViewPresetTableName.Experiments,
-            projectId,
-            controllers: viewControllers,
+    <>
+      <DataTableControlsProvider>
+        <div className="flex h-full w-full flex-col">
+          {/* Toolbar spanning full width */}
+          <DataTableToolbar
+            columns={columns}
+            filterState={queryFilter.filterState}
+            viewConfig={{
+              tableName: TableViewPresetTableName.Experiments,
+              projectId,
+              controllers: viewControllers,
+            }}
+            columnsWithCustomSelect={["name", "datasetId"]}
+            columnVisibility={columnVisibility}
+            setColumnVisibility={setColumnVisibilityState}
+            columnOrder={columnOrder}
+            setColumnOrder={setColumnOrder}
+            orderByState={orderByState}
+            rowHeight={rowHeight}
+            setRowHeight={setRowHeight}
+            timeRange={timeRange}
+            setTimeRange={setTimeRange}
+            multiSelect={{
+              selectAll,
+              setSelectAll,
+              selectedRowIds:
+                Object.keys(selectedRows).filter((experimentId) =>
+                  experiments.rows?.map((e) => e.id).includes(experimentId),
+                ) ?? [],
+              setRowSelection: setSelectedRows,
+              totalCount,
+              pageSize: paginationState.limit,
+              pageIndex: paginationState.page - 1,
+            }}
+            actionButtons={
+              selectedExperimentIds.length > 0
+                ? [
+                    <Button
+                      key="compare-selected"
+                      variant="outline"
+                      onClick={handleCompareSelected}
+                      className="gap-1"
+                    >
+                      <GitCompareArrows className="h-4 w-4" />
+                      Compare ({selectedExperimentIds.length})
+                    </Button>,
+                    ...(hasEvalAccess
+                      ? [
+                          <Button
+                            key="run-evaluator"
+                            variant="outline"
+                            onClick={() => setShowRunEvaluationDialog(true)}
+                            className="gap-1"
+                          >
+                            <LightbulbIcon className="h-4 w-4" />
+                            Run Evaluator
+                          </Button>,
+                        ]
+                      : []),
+                  ]
+                : undefined
+            }
+          />
+
+          {/* Content area with sidebar and table */}
+          <ResizableFilterLayout>
+            <DataTableControls queryFilter={queryFilter} />
+
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <DataTable
+                key={`experiments-table-${dataUpdatedAt}`}
+                tableName={"experiments"}
+                columns={columns}
+                data={
+                  experiments.status === "loading" || isViewLoading
+                    ? { isLoading: true, isError: false }
+                    : experiments.status === "error"
+                      ? {
+                          isLoading: false,
+                          isError: true,
+                          error: "",
+                        }
+                      : {
+                          isLoading: false,
+                          isError: false,
+                          data: rows,
+                        }
+                }
+                pagination={{
+                  totalCount,
+                  onChange: (updater) => {
+                    const newState =
+                      typeof updater === "function"
+                        ? updater({
+                            pageIndex: paginationState.page - 1,
+                            pageSize: paginationState.limit,
+                          })
+                        : updater;
+                    setPaginationState({
+                      page: newState.pageIndex + 1,
+                      limit: newState.pageSize,
+                    });
+                  },
+                  state: {
+                    pageIndex: paginationState.page - 1,
+                    pageSize: paginationState.limit,
+                  },
+                }}
+                rowSelection={selectedRows}
+                setRowSelection={setSelectedRows}
+                setOrderBy={setOrderByState}
+                orderBy={orderByState}
+                columnOrder={columnOrder}
+                onColumnOrderChange={setColumnOrder}
+                columnVisibility={columnVisibility}
+                onColumnVisibilityChange={setColumnVisibilityState}
+                rowHeight={rowHeight}
+                onRowClick={(row, event) => {
+                  // Handle Command/Ctrl+click to open experiment in new tab
+                  if (event && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    const experimentId = row.id;
+                    const experimentUrl = `/project/${projectId}/experiments/results?baseline=${encodeURIComponent(experimentId)}`;
+                    const fullUrl = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${experimentUrl}`;
+                    window.open(fullUrl, "_blank");
+                  }
+                  // For normal clicks, navigate to experiment detail page
+                  else {
+                    void router.push(
+                      `/project/${projectId}/experiments/results?baseline=${encodeURIComponent(row.id)}`,
+                    );
+                  }
+                }}
+              />
+            </div>
+          </ResizableFilterLayout>
+        </div>
+      </DataTableControlsProvider>
+
+      {showRunEvaluationDialog && (
+        <RunEvaluationDialog
+          projectId={projectId}
+          selectedObservationIds={[]}
+          query={batchActionQuery}
+          selectAll={true}
+          totalCount={selectedExperimentIds.length}
+          onClose={() => {
+            setShowRunEvaluationDialog(false);
+            setSelectedRows({});
           }}
-          columnsWithCustomSelect={["name", "datasetId"]}
-          columnVisibility={columnVisibility}
-          setColumnVisibility={setColumnVisibilityState}
-          columnOrder={columnOrder}
-          setColumnOrder={setColumnOrder}
-          orderByState={orderByState}
-          rowHeight={rowHeight}
-          setRowHeight={setRowHeight}
-          timeRange={timeRange}
-          setTimeRange={setTimeRange}
-          multiSelect={{
-            selectAll,
-            setSelectAll,
-            selectedRowIds:
-              Object.keys(selectedRows).filter((experimentId) =>
-                experiments.rows?.map((e) => e.id).includes(experimentId),
-              ) ?? [],
-            setRowSelection: setSelectedRows,
-            totalCount,
-            pageSize: paginationState.limit,
-            pageIndex: paginationState.page - 1,
-          }}
-          actionButtons={
-            selectedExperimentIds.length > 0
-              ? [
-                  <Button
-                    key="compare-selected"
-                    variant="outline"
-                    onClick={handleCompareSelected}
-                    className="gap-1"
-                  >
-                    <GitCompareArrows className="h-4 w-4" />
-                    Compare ({selectedExperimentIds.length})
-                  </Button>,
-                ]
-              : undefined
-          }
+          sourceTable="experiments"
         />
-
-        {/* Content area with sidebar and table */}
-        <ResizableFilterLayout>
-          <DataTableControls queryFilter={queryFilter} />
-
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <DataTable
-              key={`experiments-table-${dataUpdatedAt}`}
-              tableName={"experiments"}
-              columns={columns}
-              data={
-                experiments.status === "loading" || isViewLoading
-                  ? { isLoading: true, isError: false }
-                  : experiments.status === "error"
-                    ? {
-                        isLoading: false,
-                        isError: true,
-                        error: "",
-                      }
-                    : {
-                        isLoading: false,
-                        isError: false,
-                        data: rows,
-                      }
-              }
-              pagination={{
-                totalCount,
-                onChange: (updater) => {
-                  const newState =
-                    typeof updater === "function"
-                      ? updater({
-                          pageIndex: paginationState.page - 1,
-                          pageSize: paginationState.limit,
-                        })
-                      : updater;
-                  setPaginationState({
-                    page: newState.pageIndex + 1,
-                    limit: newState.pageSize,
-                  });
-                },
-                state: {
-                  pageIndex: paginationState.page - 1,
-                  pageSize: paginationState.limit,
-                },
-              }}
-              rowSelection={selectedRows}
-              setRowSelection={setSelectedRows}
-              setOrderBy={setOrderByState}
-              orderBy={orderByState}
-              columnOrder={columnOrder}
-              onColumnOrderChange={setColumnOrder}
-              columnVisibility={columnVisibility}
-              onColumnVisibilityChange={setColumnVisibilityState}
-              rowHeight={rowHeight}
-              onRowClick={(row, event) => {
-                // Handle Command/Ctrl+click to open experiment in new tab
-                if (event && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault();
-                  const experimentId = row.id;
-                  const experimentUrl = `/project/${projectId}/experiments/results?baseline=${encodeURIComponent(experimentId)}`;
-                  const fullUrl = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}${experimentUrl}`;
-                  window.open(fullUrl, "_blank");
-                }
-                // For normal clicks, navigate to experiment detail page
-                else {
-                  void router.push(
-                    `/project/${projectId}/experiments/results?baseline=${encodeURIComponent(row.id)}`,
-                  );
-                }
-              }}
-            />
-          </div>
-        </ResizableFilterLayout>
-      </div>
-    </DataTableControlsProvider>
+      )}
+    </>
   );
 }

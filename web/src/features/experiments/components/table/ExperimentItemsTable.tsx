@@ -6,6 +6,10 @@ import {
 } from "@/src/components/table/data-table-controls";
 import { ResizableFilterLayout } from "@/src/components/table/resizable-filter-layout";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { RunEvaluationDialog } from "@/src/features/batch-actions/components/RunEvaluationDialog";
+import { Button } from "@/src/components/ui/button";
+import { LightbulbIcon } from "lucide-react";
+import { useHasProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 import { usePaginationState } from "@/src/hooks/usePaginationState";
 import { useSidebarFilterState } from "@/src/features/filters/hooks/useSidebarFilterState";
 import {
@@ -220,6 +224,11 @@ export default function ExperimentItemsTable({
 }: ExperimentItemsTableProps) {
   const { setDetailPageList } = useDetailPageLists();
   const [selectedRows, setSelectedRows] = useState<RowSelectionState>({});
+  const [showRunEvaluationDialog, setShowRunEvaluationDialog] = useState(false);
+  const hasEvalAccess = useHasProjectAccess({
+    projectId,
+    scope: "evalJob:CUD",
+  });
 
   const {
     baselineId,
@@ -912,6 +921,64 @@ export default function ExperimentItemsTable({
     [paginationState, setPaginationState, totalCount],
   );
 
+  // Compute selected observation IDs for batch evaluation
+  const selectedObservationIds = useMemo(() => {
+    const selectedItemIds = Object.keys(selectedRows);
+    return (
+      rows
+        ?.filter((row) => selectedItemIds.includes(row.itemId))
+        .flatMap((row) => row.experiments.map((exp) => exp.observationId))
+        .filter((id): id is string => Boolean(id)) ?? []
+    );
+  }, [selectedRows, rows]);
+
+  // Get example observation for preview in the evaluation dialog
+  const exampleObservation = useMemo(() => {
+    // Find first experiment with a non-null observationId from selected rows
+    for (const row of rows ?? []) {
+      if (!selectedRows[row.itemId]) continue;
+      for (const exp of row.experiments) {
+        if (exp.observationId && exp.traceId) {
+          return {
+            id: exp.observationId,
+            traceId: exp.traceId,
+            startTime: exp.startTime,
+          };
+        }
+      }
+    }
+    return undefined;
+  }, [rows, selectedRows]);
+
+  // Count of selected items (not observations) for display
+  const selectedItemCount = useMemo(() => {
+    return Object.keys(selectedRows).filter((itemId) =>
+      rows?.some((row) => row.itemId === itemId),
+    ).length;
+  }, [selectedRows, rows]);
+
+  // Build query for batch actions (includes experiment context filter)
+  const batchActionQuery = useMemo(
+    () => ({
+      filter: [
+        ...filtersByExperiment.flatMap((f) => f.filters),
+        // Include experiment context filter
+        ...(allExperimentIds.length > 0
+          ? [
+              {
+                column: "experimentId" as const,
+                operator: "any of" as const,
+                value: allExperimentIds,
+                type: "stringOptions" as const,
+              },
+            ]
+          : []),
+      ],
+      orderBy: orderByState,
+    }),
+    [filtersByExperiment, orderByState, allExperimentIds],
+  );
+
   return (
     <DataTableControlsProvider
       tableName={experimentItemsFilterConfig.tableName}
@@ -949,6 +1016,21 @@ export default function ExperimentItemsTable({
               pageSize: paginationState.pageSize,
               pageIndex: paginationState.pageIndex,
             }}
+            actionButtons={
+              hasEvalAccess && (selectAll || selectedItemCount > 0) ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowRunEvaluationDialog(true)}
+                >
+                  <LightbulbIcon className="mr-2 h-4 w-4" />
+                  Evaluate
+                  {!selectAll && selectedItemCount > 0
+                    ? ` (${selectedItemCount})`
+                    : null}
+                </Button>
+              ) : null
+            }
           />
         )}
 
@@ -983,6 +1065,11 @@ export default function ExperimentItemsTable({
                   traceScoreOrder={traceScoreOrder}
                   peekView={peekConfig}
                   columnVisibility={columnVisibility}
+                  selectActionColumn={
+                    hideControls ? undefined : selectActionColumn
+                  }
+                  rowSelection={selectedRows}
+                  setRowSelection={setSelectedRows}
                 />
               ) : (
                 <div className="flex flex-1 items-center justify-center">
@@ -1023,6 +1110,28 @@ export default function ExperimentItemsTable({
 
         {/* Peek view panel */}
         {peekConfig && <TablePeekView peekView={peekConfig} />}
+
+        {/* Run Evaluation Dialog */}
+        {showRunEvaluationDialog && (
+          <RunEvaluationDialog
+            projectId={projectId}
+            selectedObservationIds={selectedObservationIds}
+            query={batchActionQuery}
+            selectAll={selectAll}
+            totalCount={
+              selectAll
+                ? (totalCount ?? 0) * allExperimentIds.length
+                : selectedObservationIds.length
+            }
+            onClose={() => {
+              setShowRunEvaluationDialog(false);
+              setSelectedRows({});
+              setSelectAll(false);
+            }}
+            exampleObservation={exampleObservation}
+            sourceTable="experiment-items"
+          />
+        )}
       </div>
     </DataTableControlsProvider>
   );
