@@ -16,7 +16,10 @@ import {
   listPublicContinuousEvaluationConfigs,
   loadEvaluatorForContinuousEvaluation,
 } from "./queries";
-import { assertEvaluatorDefinitionCanRunForPublicApi } from "./validation";
+import {
+  assertContinuousEvaluationFilterValuesExistForProject,
+  assertEvaluatorDefinitionCanRunForPublicApi,
+} from "./validation";
 import { createUnstablePublicApiError } from "@/src/features/public-api/server/unstable-public-api-error-contract";
 
 const MAX_ACTIVE_CONTINUOUS_EVALUATIONS = 50;
@@ -99,6 +102,12 @@ export async function createPublicContinuousEvaluation(params: {
       params.projectId,
     );
   }
+
+  await assertContinuousEvaluationFilterValuesExistForProject({
+    projectId: params.projectId,
+    target: params.input.target,
+    filters: params.input.filter,
+  });
 
   const { template } = await loadEvaluatorForContinuousEvaluation({
     projectId: params.projectId,
@@ -200,6 +209,11 @@ export async function updatePublicContinuousEvaluation(params: {
     "filter" in params.input && params.input.filter !== undefined
       ? params.input.filter
       : existingPublic.filter;
+  await assertContinuousEvaluationFilterValuesExistForProject({
+    projectId: params.projectId,
+    target: nextTarget,
+    filters: nextFilter,
+  });
   const nextMapping =
     "mapping" in params.input && params.input.mapping !== undefined
       ? params.input.mapping

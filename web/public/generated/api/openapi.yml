@@ -6135,6 +6135,9 @@ paths:
         - Langfuse resolves that family to its latest version before saving the
         continuous evaluation
 
+        - for `target=experiment`, use dataset `id` values from `GET
+        /api/public/v2/datasets` when filtering by `datasetId`
+
         - every evaluator prompt variable must be mapped exactly once
 
         - `expected_output` mappings are only valid for `target=experiment`
@@ -6172,6 +6175,10 @@ paths:
 
         - `400 invalid_filter_value`: fix the filter `column` or `value` using
         `details.column`, `details.invalidValues`, and `details.allowedValues`
+
+        - `400 invalid_filter_value` with `details.column=datasetId`: call `GET
+        /api/public/v2/datasets`, then retry with dataset `id` values from that
+        response
 
         - `400 missing_variable_mapping`: fetch the evaluator again and make
         sure every variable in `variables` appears exactly once in `mapping`
@@ -6241,7 +6248,7 @@ paths:
                         column: datasetId
                         operator: any of
                         value:
-                          - dataset-prod
+                          - 550e8400-e29b-41d4-a716-446655440000
                     mapping:
                       - variable: output
                         source: output
@@ -6341,7 +6348,7 @@ paths:
                       column: datasetId
                       operator: any of
                       value:
-                        - dataset-prod
+                        - 550e8400-e29b-41d4-a716-446655440000
                   mapping:
                     - variable: output
                       source: output
@@ -11938,6 +11945,7 @@ components:
         - `experiment` evaluates live experiment executions and can additionally
         map `expected_output`.
           It currently supports filtering by `datasetId`.
+          Discover valid dataset IDs with `GET /api/public/v2/datasets`, then use the returned dataset `id` values in your filter.
     unstableContinuousEvaluationStatus:
       title: unstableContinuousEvaluationStatus
       type: string
@@ -12730,6 +12738,7 @@ components:
           - `toolCalls`: `number`
         - `target=experiment`
           - `datasetId`: `stringOptions`, operators `any of` / `none of`
+            Use dataset `id` values from `GET /api/public/v2/datasets`, not dataset names.
 
         Recovery guidance:
 
@@ -12739,6 +12748,10 @@ components:
         - `invalid_filter_value` with `details.invalidValues`: the selected
         values are not allowed for that column. Replace them with one of
         `details.allowedValues` when provided.
+
+        - `invalid_filter_value` for `column=datasetId`: call `GET
+        /api/public/v2/datasets`, then retry with dataset `id` values from that
+        response.
     unstableContinuousEvaluation:
       title: unstableContinuousEvaluation
       type: object
@@ -12888,6 +12901,10 @@ components:
 
         - choose `target=observation` or `target=experiment`
 
+        - if `target=experiment` and you want a dataset filter, call `GET
+        /api/public/v2/datasets` first and use dataset `id` values in
+        `filter[].value`
+
         - fetch or inspect the evaluator first, then provide a complete variable
         mapping for every evaluator variable listed in `variables`
 
@@ -12935,6 +12952,9 @@ components:
 
             Each filter object must use a column that is valid for that
             `target`.
+
+            For `target=experiment`, `column=datasetId` expects dataset `id`
+            values from `GET /api/public/v2/datasets`, not dataset names.
         mapping:
           type: array
           items:
@@ -12975,6 +12995,9 @@ components:
 
         - If you change `target`, usually send both `filter` and `mapping` in
         the same request.
+
+        - If you change an experiment `datasetId` filter, call `GET
+        /api/public/v2/datasets` and use dataset `id` values from that response.
       properties:
         name:
           type: string
@@ -13007,7 +13030,12 @@ components:
           items:
             $ref: '#/components/schemas/unstableContinuousEvaluationFilter'
           nullable: true
-          description: Updated filter list.
+          description: >-
+            Updated filter list.
+
+
+            For `target=experiment`, `column=datasetId` expects dataset `id`
+            values from `GET /api/public/v2/datasets`, not dataset names.
         mapping:
           type: array
           items:

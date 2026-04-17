@@ -2,6 +2,7 @@ import {
   experimentEvalFilterColumns,
   observationEvalFilterColumns,
 } from "@langfuse/shared";
+import { prisma } from "@langfuse/shared/src/db";
 import { JSONPath } from "jsonpath-plus";
 import type {
   PublicContinuousEvaluationFilterType,
@@ -120,6 +121,69 @@ export function validateContinuousEvaluationFilters(params: {
           column: filter.column,
           invalidValues,
           allowedValues: Array.from(allowedValues),
+        },
+      });
+    }
+  }
+}
+
+export async function assertContinuousEvaluationFilterValuesExistForProject(params: {
+  projectId: string;
+  target: PublicContinuousEvaluationTargetType;
+  filters: PublicContinuousEvaluationFilterType[];
+}) {
+  if (params.target !== "experiment") {
+    return;
+  }
+
+  const datasetFilters = params.filters.flatMap((filter, filterIndex) => {
+    if (
+      filter.column !== "datasetId" ||
+      !("value" in filter) ||
+      !Array.isArray(filter.value)
+    ) {
+      return [];
+    }
+
+    return [{ filterIndex, values: filter.value }] as const;
+  });
+
+  if (datasetFilters.length === 0) {
+    return;
+  }
+
+  const requestedDatasetIds = Array.from(
+    new Set(datasetFilters.flatMap((filter) => filter.values)),
+  );
+  const existingDatasets = await prisma.dataset.findMany({
+    where: {
+      projectId: params.projectId,
+      id: {
+        in: requestedDatasetIds,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+  const existingDatasetIds = new Set(
+    existingDatasets.map((dataset) => dataset.id),
+  );
+
+  for (const filter of datasetFilters) {
+    const invalidValues = filter.values.filter(
+      (value) => !existingDatasetIds.has(value),
+    );
+
+    if (invalidValues.length > 0) {
+      throw createUnstablePublicApiError({
+        httpCode: 400,
+        code: "invalid_filter_value",
+        message: `Filter column "datasetId" contains dataset id(s) that do not exist in this project: ${invalidValues.join(", ")}`,
+        details: {
+          field: `filter[${filter.filterIndex}].value`,
+          column: "datasetId",
+          invalidValues,
         },
       });
     }

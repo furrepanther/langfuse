@@ -27,6 +27,7 @@ types:
         It supports mapping from `input`, `output`, and `metadata`.
       - `experiment` evaluates live experiment executions and can additionally map `expected_output`.
         It currently supports filtering by `datasetId`.
+        Discover valid dataset IDs with `GET /api/public/v2/datasets`, then use the returned dataset `id` values in your filter.
     enum:
       - observation
       - experiment
@@ -499,10 +500,12 @@ types:
         - `toolCalls`: `number`
       - `target=experiment`
         - `datasetId`: `stringOptions`, operators `any of` / `none of`
+          Use dataset `id` values from `GET /api/public/v2/datasets`, not dataset names.
 
       Recovery guidance:
       - `invalid_filter_value` with `details.column` but no `invalidValues`: the selected `column` is not supported for the chosen `target`
       - `invalid_filter_value` with `details.invalidValues`: the selected values are not allowed for that column. Replace them with one of `details.allowedValues` when provided.
+      - `invalid_filter_value` for `column=datasetId`: call `GET /api/public/v2/datasets`, then retry with dataset `id` values from that response.
     discriminant: type
     union:
       "datetime":
@@ -558,4 +561,4 @@ types:
           column: datasetId
           operator: any of
           value:
-            - dataset-prod
+            - "550e8400-e29b-41d4-a716-446655440000"

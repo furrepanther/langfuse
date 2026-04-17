@@ -69,6 +69,9 @@ jest.mock("@langfuse/shared/src/db", () => ({
   },
   prisma: {
     $transaction: jest.fn(),
+    dataset: {
+      findMany: jest.fn(),
+    },
     jobConfiguration: {
       findFirst: jest.fn(),
       create: jest.fn(),
@@ -131,6 +134,9 @@ const managedTemplate = {
 
 const mockedPrisma = prisma as unknown as {
   $transaction: jest.Mock;
+  dataset: {
+    findMany: jest.Mock;
+  };
   jobConfiguration: {
     findFirst: jest.Mock;
     create: jest.Mock;
@@ -192,6 +198,7 @@ describe("unstable public eval services", () => {
     jest.clearAllMocks();
     mockCountActiveContinuousEvaluations.mockResolvedValue(0);
     mockCountContinuousEvaluationsForEvaluator.mockResolvedValue(0);
+    mockedPrisma.dataset.findMany.mockResolvedValue([]);
 
     mockedPrisma.$transaction.mockImplementation(async (callback) =>
       callback({
@@ -617,6 +624,53 @@ describe("unstable public eval services", () => {
     expect(mockedPrisma.jobConfiguration.create).not.toHaveBeenCalled();
   });
 
+  it("rejects experiment continuous evaluations that reference unknown dataset ids", async () => {
+    mockedPrisma.dataset.findMany.mockResolvedValueOnce([
+      { id: "dataset_valid" },
+    ]);
+
+    await expect(
+      createPublicContinuousEvaluation({
+        projectId: "project_123",
+        input: {
+          name: "experiment_answer_quality",
+          evaluator: {
+            name: "Answer correctness",
+            scope: "project",
+          },
+          target: "experiment",
+          enabled: true,
+          sampling: 1,
+          filter: [
+            {
+              type: "stringOptions",
+              column: "datasetId",
+              operator: "any of",
+              value: ["dataset_valid", "dataset_missing"],
+            },
+          ],
+          mapping: [{ variable: "input", source: "input" }],
+        },
+      }),
+    ).rejects.toThrow(
+      'Filter column "datasetId" contains dataset id(s) that do not exist in this project: dataset_missing',
+    );
+
+    expect(mockedPrisma.dataset.findMany).toHaveBeenCalledWith({
+      where: {
+        projectId: "project_123",
+        id: {
+          in: ["dataset_valid", "dataset_missing"],
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+    expect(mockLoadEvaluatorForContinuousEvaluation).not.toHaveBeenCalled();
+    expect(mockedPrisma.jobConfiguration.create).not.toHaveBeenCalled();
+  });
+
   it("passes stored modelParams into create-time evaluator preflight", async () => {
     mockLoadEvaluatorForContinuousEvaluation.mockResolvedValueOnce({
       template: {
@@ -853,6 +907,50 @@ describe("unstable public eval services", () => {
       "This project already has the maximum number of active continuous evaluations (50).",
     );
 
+    expect(mockLoadEvaluatorForContinuousEvaluation).not.toHaveBeenCalled();
+    expect(mockedPrisma.jobConfiguration.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects experiment filter updates that reference unknown dataset ids", async () => {
+    mockFindPublicContinuousEvaluationOrThrow.mockResolvedValueOnce(
+      createContinuousEvaluationRecord({
+        targetObject: EvalTargetObject.EXPERIMENT,
+      }),
+    );
+    mockedPrisma.dataset.findMany.mockResolvedValueOnce([]);
+
+    await expect(
+      updatePublicContinuousEvaluation({
+        projectId: "project_123",
+        continuousEvaluationId: "ceval_123",
+        input: {
+          target: "experiment",
+          filter: [
+            {
+              type: "stringOptions",
+              column: "datasetId",
+              operator: "any of",
+              value: ["dataset_missing"],
+            },
+          ],
+          mapping: [{ variable: "input", source: "input" }],
+        },
+      }),
+    ).rejects.toThrow(
+      'Filter column "datasetId" contains dataset id(s) that do not exist in this project: dataset_missing',
+    );
+
+    expect(mockedPrisma.dataset.findMany).toHaveBeenCalledWith({
+      where: {
+        projectId: "project_123",
+        id: {
+          in: ["dataset_missing"],
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
     expect(mockLoadEvaluatorForContinuousEvaluation).not.toHaveBeenCalled();
     expect(mockedPrisma.jobConfiguration.update).not.toHaveBeenCalled();
   });

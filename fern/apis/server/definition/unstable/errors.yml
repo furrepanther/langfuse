@@ -135,6 +135,15 @@ types:
               - GENERATION
               - SPAN
               - EVENT
+      - name: InvalidExperimentDatasetFilterValue
+        value:
+          message: 'Filter column "datasetId" contains dataset id(s) that do not exist in this project: dataset-prod'
+          code: invalid_filter_value
+          details:
+            field: filter[0].value
+            column: datasetId
+            invalidValues:
+              - dataset-prod
       - name: EvaluatorPreflightFailed
         value:
           message: 'No valid LLM model found for evaluator "answer-correctness". No default model or custom model configured for project project_123'
@@ -195,6 +204,7 @@ errors:
       Recovery guidance:
       - read `details.issues` for malformed bodies or queries
       - read `details.column`, `details.invalidValues`, and `details.allowedValues` for filter problems
+      - for `details.column=datasetId`, call `GET /api/public/v2/datasets` and retry with dataset `id` values from that response
       - read `details.variable` or `details.variables` for mapping problems
     status-code: 400
     type: PublicApiError
