@@ -19,6 +19,7 @@ export default defineConfig({
           name: "client",
           include: ["src/**/*.clienttest.{ts,tsx}"],
           environment: "jsdom",
+          setupFiles: ["@testing-library/jest-dom/vitest"],
         },
       },
       {
