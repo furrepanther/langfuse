@@ -86,6 +86,25 @@ export class IngestionQueue {
       logger.error(`IngestionQueue shard ${shardIndex} error`, err);
     });
 
+    const globalConcurrency = env.LANGFUSE_INGESTION_QUEUE_GLOBAL_CONCURRENCY;
+    if (globalConcurrency > 0) {
+      queueInstance
+        ?.setGlobalConcurrency(globalConcurrency)
+        .catch((err) =>
+          logger.error(`Failed to set global concurrency for ${name}`, err),
+        );
+    } else {
+      // globalConcurrency === 0 means disabled. HDEL the field to remove the cap.
+      // BullMQ 5.34 lacks removeGlobalConcurrency(); HDEL directly.
+      queueInstance?.client
+        .then((client) =>
+          client.hdel(`${queueInstance.qualifiedName}:meta`, "concurrency"),
+        )
+        .catch((err) =>
+          logger.error(`Failed to remove global concurrency for ${name}`, err),
+        );
+    }
+
     IngestionQueue.instances.set(shardIndex, queueInstance);
 
     return queueInstance;
